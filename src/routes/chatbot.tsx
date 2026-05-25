@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
-import { MobileShell, PageHeader } from "@/components/mobile-shell";
+import { MobileShell } from "@/components/mobile-shell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Send, Sparkles } from "lucide-react";
@@ -20,6 +20,8 @@ const STARTERS = [
   "My child has tooth pain — what should I do?",
   "When should kids start flossing?",
   "Tips to help my toddler love brushing",
+  "What foods damage children's teeth?",
+  "When should kids first visit a dentist?",
 ];
 
 function ChatbotPage() {
@@ -30,9 +32,11 @@ function ChatbotPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRefMobile = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    scrollRefMobile.current?.scrollTo({ top: scrollRefMobile.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
   async function send(text: string) {
@@ -64,55 +68,124 @@ function ChatbotPage() {
     }
   }
 
+  const MessageBubbles = ({ scrollRef: ref }: { scrollRef: React.RefObject<HTMLDivElement | null> }) => (
+    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-4">
+      {messages.map((m, i) => (
+        <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+          {m.role === "assistant" && (
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-white text-sm shrink-0 mr-3 mt-0.5">
+              🦷
+            </div>
+          )}
+          <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-[var(--shadow-card)] ${
+            m.role === "user"
+              ? "bg-primary text-primary-foreground rounded-br-sm"
+              : "bg-background border border-border rounded-bl-sm"
+          }`}>
+            {m.content}
+          </div>
+        </div>
+      ))}
+      {busy && (
+        <div className="flex justify-start">
+          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-white text-sm shrink-0 mr-3 mt-0.5">
+            🦷
+          </div>
+          <div className="bg-background border border-border rounded-2xl rounded-bl-sm px-4 py-3 inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-primary animate-bounce" />
+            <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0.15s]" />
+            <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0.3s]" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const ChatInput = () => (
+    <div className="border-t border-border p-4 bg-card shrink-0">
+      <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-3">
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask Buddy anything…"
+          className="h-11 rounded-2xl bg-background"
+        />
+        <Button type="submit" size="icon" disabled={busy || !input.trim()} className="h-11 w-11 rounded-2xl shrink-0">
+          <Send className="h-4 w-4" />
+        </Button>
+      </form>
+    </div>
+  );
+
   return (
     <MobileShell>
-      <PageHeader title="Buddy AI 🦷" subtitle="Your pediatric dental assistant" />
-      <div ref={scrollRef} className="px-5 pb-4 max-h-[calc(100dvh-260px)] overflow-y-auto space-y-3">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-[var(--shadow-card)] ${
-              m.role === "user"
-                ? "bg-primary text-primary-foreground rounded-br-sm"
-                : "bg-card border border-border rounded-bl-sm"
-            }`}>
-              {m.content}
-            </div>
-          </div>
-        ))}
-        {busy && (
-          <div className="flex justify-start">
-            <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-muted-foreground inline-flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" />
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.15s]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.3s]" />
-            </div>
-          </div>
-        )}
-        {messages.length === 1 && (
-          <div className="pt-2">
-            <p className="text-xs font-medium text-muted-foreground mb-2 inline-flex items-center gap-1">
-              <Sparkles className="h-3 w-3" /> Try asking
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {STARTERS.map((s) => (
-                <button key={s} onClick={() => send(s)} className="text-xs rounded-full bg-secondary text-secondary-foreground px-3 py-1.5 hover:bg-accent">
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      {/* ── MOBILE layout (lg:hidden) ── */}
+      <div className="lg:hidden flex flex-col" style={{ height: "calc(100dvh - 56px - 80px)" }}>
+        <div className="px-5 pt-5 pb-3 shrink-0">
+          <h1 className="text-2xl font-bold tracking-tight">Buddy AI 🦷</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Your pediatric dental assistant</p>
+        </div>
+        <div className="flex-1 min-h-0 mx-4 mb-2 rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden flex flex-col">
+          <MessageBubbles scrollRef={scrollRefMobile} />
+          <ChatInput />
+        </div>
       </div>
 
-      <form
-        onSubmit={(e) => { e.preventDefault(); send(input); }}
-        className="fixed bottom-16 left-0 right-0 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-[430px] px-4 py-3 bg-background/90 backdrop-blur border-t border-border"
-      >
-        <div className="flex gap-2">
-          <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask Buddy anything…" className="h-11 rounded-2xl bg-card" />
-          <Button type="submit" size="icon" disabled={busy || !input.trim()} className="h-11 w-11 rounded-2xl shrink-0"><Send className="h-4 w-4" /></Button>
+      {/* ── DESKTOP layout (hidden lg:flex) ── */}
+      <div className="hidden lg:flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
+        <div className="max-w-screen-xl mx-auto w-full px-6 pt-8 pb-4 shrink-0">
+          <h1 className="text-3xl font-bold tracking-tight">Buddy AI 🦷</h1>
+          <p className="text-muted-foreground mt-1.5">Your pediatric dental assistant</p>
         </div>
-      </form>
+
+        <div className="flex-1 min-h-0 max-w-screen-xl mx-auto w-full px-6 pb-6 grid grid-cols-[1fr_280px] gap-6">
+          {/* Chat area */}
+          <div className="flex flex-col min-h-0 rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden">
+            <MessageBubbles scrollRef={scrollRef} />
+            <div className="border-t border-border p-4 bg-card">
+              <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-3">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask Buddy anything about your child's dental health…"
+                  className="h-12 rounded-2xl bg-background"
+                />
+                <Button type="submit" size="icon" disabled={busy || !input.trim()} className="h-12 w-12 rounded-2xl shrink-0">
+                  <Send className="h-4 w-4" />
+                </Button>
+              </form>
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" /> Try asking
+              </h3>
+              <div className="space-y-2">
+                {STARTERS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    disabled={busy}
+                    className="w-full text-left text-sm rounded-xl bg-secondary text-secondary-foreground px-3.5 py-2.5 hover:bg-accent transition-colors disabled:opacity-50"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">About Buddy</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Buddy is an AI trained on pediatric dental guidelines. Always consult a qualified dentist for medical decisions.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </MobileShell>
   );
 }

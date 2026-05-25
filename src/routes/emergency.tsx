@@ -19,43 +19,65 @@ const STEPS = [
 function EmergencyPage() {
   return (
     <MobileShell>
-      <PageHeader title="Emergency 🚨" subtitle="Quick first-aid & rapid help" />
-      <div className="px-5 space-y-4">
-        <div className="rounded-2xl bg-gradient-to-br from-coral to-destructive p-5 text-coral-foreground shadow-[var(--shadow-soft)]">
-          <p className="text-xs font-bold uppercase tracking-wide opacity-90">If life-threatening</p>
-          <p className="text-2xl font-bold mt-1">Call 112 immediately</p>
-          <Button asChild variant="secondary" className="mt-4 rounded-2xl w-full h-12">
-            <a href="tel:112"><Phone className="h-4 w-4 mr-1.5" /> Call emergency line</a>
-          </Button>
-        </div>
+      <div className="max-w-screen-xl mx-auto px-5 pb-6 lg:px-6 lg:py-8">
+        <PageHeader title="Emergency 🚨" subtitle="Quick first-aid & rapid help" />
 
-        <div className="grid grid-cols-2 gap-3">
-          <Button asChild variant="outline" className="h-14 rounded-2xl flex-col gap-0.5">
-            <Link to="/dentists">
-              <Stethoscope className="h-5 w-5" />
-              <span className="text-xs font-medium">Find dentist</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-14 rounded-2xl flex-col gap-0.5">
-            <Link to="/chatbot">
-              <MessageCircle className="h-5 w-5" />
-              <span className="text-xs font-medium">Ask Buddy</span>
-            </Link>
-          </Button>
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5 lg:gap-8 items-start">
+          {/* Left: SOS + actions */}
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-gradient-to-br from-coral to-destructive p-6 text-coral-foreground shadow-[var(--shadow-soft)]">
+              <p className="text-sm font-bold uppercase tracking-wide opacity-90">If life-threatening</p>
+              <p className="text-3xl font-bold mt-1">Call 112 immediately</p>
+              <p className="text-sm opacity-80 mt-2 leading-relaxed">
+                For severe bleeding, loss of consciousness, or any life-threatening dental emergency, call emergency services right away.
+              </p>
+              <Button asChild variant="secondary" className="mt-5 rounded-2xl w-full h-12 text-base font-semibold">
+                <a href="tel:112"><Phone className="h-4 w-4 mr-2" /> Call emergency line</a>
+              </Button>
+            </div>
 
-        <div>
-          <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mt-4 mb-2">First-aid guide</h2>
-          <div className="space-y-3">
-            {STEPS.map((s, i) => (
-              <div key={s.title} className="rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-card)]">
-                <div className="flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-full bg-coral text-coral-foreground text-xs font-bold flex items-center justify-center">{i+1}</span>
-                  <p className="font-semibold">{s.title}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Button asChild variant="outline" className="h-16 rounded-2xl flex-col gap-1.5">
+                <Link to="/dentists">
+                  <Stethoscope className="h-5 w-5" />
+                  <span className="text-xs font-medium">Find dentist</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="h-16 rounded-2xl flex-col gap-1.5">
+                <Link to="/chatbot">
+                  <MessageCircle className="h-5 w-5" />
+                  <span className="text-xs font-medium">Ask Buddy AI</span>
+                </Link>
+              </Button>
+            </div>
+
+            <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+              <p className="text-sm font-semibold mb-2">⚡ Quick tips</p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>• Stay calm and reassure your child</li>
+                <li>• Don't give aspirin to children</li>
+                <li>• Always call ahead before visiting</li>
+                <li>• Keep dentist's number saved</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Right: First-aid guide */}
+          <div>
+            <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">First-aid guide</h2>
+            <div className="space-y-4">
+              {STEPS.map((s, i) => (
+                <div key={s.title} className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="h-7 w-7 rounded-full bg-coral text-coral-foreground text-sm font-bold flex items-center justify-center shrink-0">
+                      {i + 1}
+                    </span>
+                    <p className="font-semibold text-lg">{s.title}</p>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">{s.body}</p>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.body}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
