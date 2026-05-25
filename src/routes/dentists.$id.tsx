@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { MobileShell } from "@/components/mobile-shell";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Star, MapPin, BadgeCheck, Phone, Clock, IndianRupee } from "lucide-react";
 
@@ -16,10 +16,7 @@ function DentistDetail() {
 
   const { data: d } = useQuery({
     queryKey: ["dentist", id],
-    queryFn: async () => {
-      const { data } = await supabase.from("dentists").select("*").eq("id", id).maybeSingle();
-      return data;
-    },
+    queryFn: () => api.get<any>(`/dentists/${id}`),
   });
 
   if (!d) {
@@ -32,7 +29,6 @@ function DentistDetail() {
 
   return (
     <MobileShell>
-      {/* Hero */}
       <div className="bg-gradient-to-b from-primary/20 via-mint/20 to-transparent">
         <div className="max-w-screen-xl mx-auto px-5 py-5 lg:px-6 lg:py-8">
           <button
@@ -67,20 +63,19 @@ function DentistDetail() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="max-w-screen-xl mx-auto px-5 py-5 lg:px-6 lg:py-8 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 lg:gap-8 items-start">
         {/* Left: About + Clinic */}
         <div className="space-y-5">
           <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-card)]">
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mb-3">About</p>
-            <p className="leading-relaxed text-muted-foreground">{d.bio}</p>
+            <p className="leading-relaxed text-muted-foreground">{d.bio || "Experienced pediatric dental specialist dedicated to children's oral health."}</p>
           </div>
 
           <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-card)]">
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mb-3">Clinic</p>
             <p className="font-bold text-lg">{d.clinic_name}</p>
             <p className="text-muted-foreground flex items-center gap-2 mt-1.5">
-              <MapPin className="h-4 w-4 shrink-0" /> {d.address}, {d.city}
+              <MapPin className="h-4 w-4 shrink-0" /> {d.address || d.city}, {d.city}
             </p>
           </div>
 
@@ -117,9 +112,11 @@ function DentistDetail() {
             <Button asChild className="w-full h-12 rounded-2xl shadow-[var(--shadow-soft)] text-base" size="lg">
               <Link to="/book/$dentistId" params={{ dentistId: d.id }}>Book visit →</Link>
             </Button>
-            <Button variant="outline" className="w-full h-12 rounded-2xl" asChild>
-              <a href="tel:+910000000000"><Phone className="h-4 w-4 mr-2" /> Call clinic</a>
-            </Button>
+            {d.phone && (
+              <Button variant="outline" className="w-full h-12 rounded-2xl" asChild>
+                <a href={`tel:${d.phone}`}><Phone className="h-4 w-4 mr-2" /> Call clinic</a>
+              </Button>
+            )}
           </div>
         </div>
       </div>

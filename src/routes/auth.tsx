@@ -1,6 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signIn, signUp } = useAuth();
   const [tab, setTab] = useState("login");
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
@@ -30,23 +29,27 @@ function AuthPage() {
   async function login(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Welcome back!");
+    try {
+      await signIn(email, password);
+      toast.success("Welcome back!");
+    } catch (err: any) {
+      toast.error(err.message ?? "Login failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function signup(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.origin, data: { full_name: name } },
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Account created — you're in!");
+    try {
+      await signUp(email, password, name);
+      toast.success("Account created — you're in!");
+    } catch (err: any) {
+      toast.error(err.message ?? "Sign up failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -88,7 +91,6 @@ function AuthPage() {
       {/* Right form panel */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-background">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
           <Link to="/" className="flex items-center gap-2 mb-8 lg:hidden">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-white text-lg">🦷</div>
             <span className="text-lg font-bold">DentiBuddy</span>
@@ -117,7 +119,7 @@ function AuthPage() {
               <form onSubmit={signup} className="space-y-4">
                 <Field label="Your name" value={name} onChange={setName} placeholder="Riya Sharma" />
                 <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="parent@email.com" />
-                <Field label="Password" value={password} onChange={setPassword} type="password" placeholder="At least 8 characters" />
+                <Field label="Password" value={password} onChange={setPassword} type="password" placeholder="At least 6 characters" />
                 <Button disabled={busy} className="w-full h-12 rounded-2xl" size="lg">
                   {busy ? "Creating…" : "Create account"}
                 </Button>

@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell } from "@/components/mobile-shell";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,37 +22,46 @@ function BookPage() {
   const { dentistId } = Route.useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const qc = useQueryClient();
 
   const { data: dentist } = useQuery({
     queryKey: ["dentist", dentistId],
-    queryFn: async () => (await supabase.from("dentists").select("*").eq("id", dentistId).maybeSingle()).data,
+    queryFn: () => api.get<any>(`/dentists/${dentistId}`),
   });
 
   const { data: children = [] } = useQuery({
     queryKey: ["children", user?.id],
     enabled: !!user,
-    queryFn: async () => (await supabase.from("children").select("*").order("created_at")).data ?? [],
+    queryFn: () => api.get<any[]>("/children"),
   });
 
   const [childId, setChildId] = useState("");
   const [date, setDate] = useState(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
   const [time, setTime] = useState("");
   const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  async function book(e: React.FormEvent) {
+  const book = useMutation({
+    mutationFn: () =>
+      api.post("/appointments", {
+        child_id: childId,
+        dentist_id: dentistId,
+        appointment_date: date,
+        appointment_time: time,
+        reason,
+      }),
+    onSuccess: () => {
+      toast.success("Visit booked! 🎉");
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+      navigate({ to: "/appointments" });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!childId) return toast.error("Please choose a child");
     if (!time) return toast.error("Please pick a time slot");
-    setBusy(true);
-    const { error } = await supabase.from("appointments").insert({
-      parent_id: user!.id, child_id: childId, dentist_id: dentistId,
-      appointment_date: date, appointment_time: time, reason, status: "confirmed",
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Visit booked! 🎉");
-    navigate({ to: "/appointments" });
+    book.mutate();
   }
 
   return (
@@ -75,7 +84,7 @@ function BookPage() {
               </p>
             )}
 
-            <form onSubmit={book} className="space-y-6">
+            <form onSubmit={submit} className="space-y-6">
               <div>
                 <Label className="text-sm font-medium mb-2 block">Choose a child</Label>
                 {children.length === 0 ? (
@@ -144,13 +153,13 @@ function BookPage() {
                 />
               </div>
 
-              <Button disabled={busy} className="w-full h-12 rounded-2xl shadow-[var(--shadow-soft)] text-base" size="lg">
-                {busy ? "Booking…" : "Confirm booking →"}
+              <Button disabled={book.isPending} className="w-full h-12 rounded-2xl shadow-[var(--shadow-soft)] text-base" size="lg">
+                {book.isPending ? "Booking…" : "Confirm booking →"}
               </Button>
             </form>
           </div>
 
-          {/* Right: Dentist summary card */}
+          {/* Right: Dentist summary */}
           {dentist && (
             <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-card)] sticky top-24">
               <div className="flex items-center gap-4 mb-5">

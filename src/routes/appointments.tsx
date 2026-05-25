@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
+import { api } from "@/lib/api";
 import { Calendar, Clock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -19,24 +19,16 @@ function AppointmentsPage() {
   const { data = [], isLoading } = useQuery({
     queryKey: ["appointments", user?.id],
     enabled: !!user,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("appointments")
-        .select("*, dentists(name, clinic_name, city), children(name, avatar_emoji)")
-        .order("appointment_date", { ascending: false });
-      return data ?? [];
-    },
+    queryFn: () => api.get<any[]>("/appointments"),
   });
 
   const cancel = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.patch(`/appointments/${id}`, { status: "cancelled" }),
     onSuccess: () => {
       toast.success("Visit cancelled");
       qc.invalidateQueries({ queryKey: ["appointments"] });
     },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const today = new Date().toISOString().slice(0, 10);
@@ -61,7 +53,6 @@ function AppointmentsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-8">
-            {/* Upcoming */}
             <div>
               <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">
                 Upcoming · {upcoming.length}
@@ -83,7 +74,6 @@ function AppointmentsPage() {
               )}
             </div>
 
-            {/* Past & cancelled */}
             <div>
               <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">
                 Past &amp; cancelled · {past.length}

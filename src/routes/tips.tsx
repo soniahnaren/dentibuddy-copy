@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/tips")({
   component: TipsPage,
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/tips")({
 function TipsPage() {
   const { data = [] } = useQuery({
     queryKey: ["tips"],
-    queryFn: async () => (await supabase.from("tips").select("*").order("created_at")).data ?? [],
+    queryFn: () => api.get<any[]>("/tips"),
   });
 
   const byCategory = data.reduce<Record<string, any[]>>((acc, t: any) => {

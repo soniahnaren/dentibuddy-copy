@@ -11,4 +11,14 @@ export default defineConfig({
   tanstackStart: {
     spa: { enabled: true },
   },
+  vite: {
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
+    },
+  },
 });

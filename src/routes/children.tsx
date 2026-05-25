@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ function ChildrenPage() {
   const { data = [] } = useQuery({
     queryKey: ["children", user?.id],
     enabled: !!user,
-    queryFn: async () => (await supabase.from("children").select("*").order("created_at")).data ?? [],
+    queryFn: () => api.get<any[]>("/children"),
   });
 
   const [open, setOpen] = useState(false);
@@ -34,12 +34,7 @@ function ChildrenPage() {
   const [emoji, setEmoji] = useState("🧒");
 
   const add = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("children").insert({
-        parent_id: user!.id, name, date_of_birth: dob || null, avatar_emoji: emoji,
-      });
-      if (error) throw error;
-    },
+    mutationFn: () => api.post("/children", { name, date_of_birth: dob || null, avatar_emoji: emoji }),
     onSuccess: () => {
       toast.success(`${name} added!`);
       setOpen(false); setName(""); setDob(""); setEmoji("🧒");
@@ -49,14 +44,12 @@ function ChildrenPage() {
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("children").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete(`/children/${id}`),
     onSuccess: () => {
       toast.success("Removed");
       qc.invalidateQueries({ queryKey: ["children"] });
     },
+    onError: (e: any) => toast.error(e.message),
   });
 
   return (

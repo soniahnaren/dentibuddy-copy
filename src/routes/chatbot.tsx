@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell } from "@/components/mobile-shell";
 import { Input } from "@/components/ui/input";
@@ -47,19 +47,10 @@ function ChatbotPage() {
     setBusy(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("dental-chat", {
-        body: { messages: next.filter((m) => m.role !== "assistant" || messages.indexOf(m) > 0).map((m) => ({ role: m.role, content: m.content })) },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      const reply: string = data?.reply ?? "Sorry, I couldn't think of an answer.";
+      const msgs = next.filter((m) => m.role !== "assistant" || messages.indexOf(m) > 0)
+        .map((m) => ({ role: m.role, content: m.content }));
+      const { reply } = await api.post<{ reply: string }>("/chat", { messages: msgs });
       setMessages([...next, { role: "assistant", content: reply }]);
-      if (user) {
-        await supabase.from("chat_messages").insert([
-          { user_id: user.id, role: "user", content: text },
-          { user_id: user.id, role: "assistant", content: reply },
-        ]);
-      }
     } catch (e: any) {
       toast.error(e.message ?? "Buddy is unavailable right now");
       setMessages([...next, { role: "assistant", content: "Sorry, I'm having a brief hiccup. Please try again in a moment." }]);

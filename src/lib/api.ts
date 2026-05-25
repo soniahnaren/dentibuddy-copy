@@ -1,0 +1,41 @@
+const BASE = '/api';
+
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('denti_token');
+}
+
+export function saveToken(token: string) {
+  localStorage.setItem('denti_token', token);
+}
+
+export function removeToken() {
+  localStorage.removeItem('denti_token');
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: { ...headers, ...((options?.headers ?? {}) as Record<string, string>) },
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as any)?.error ?? `Request failed (${res.status})`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  get: <T>(path: string) => request<T>(path),
+  post: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+  patch: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+};

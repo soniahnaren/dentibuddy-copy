@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Baby, Lightbulb, LogOut, Mail, ChevronRight, Calendar } from "lucide-react";
 
@@ -15,28 +15,16 @@ function ProfilePage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
-  const { data: profile } = useQuery({
-    queryKey: ["profile", user?.id],
+  const { data: children = [] } = useQuery({
+    queryKey: ["children", user?.id],
     enabled: !!user,
-    queryFn: async () => (await supabase.from("profiles").select("*").eq("id", user!.id).maybeSingle()).data,
+    queryFn: () => api.get<any[]>("/children"),
   });
 
-  const { data: kidsCount = 0 } = useQuery({
-    queryKey: ["kids-count", user?.id],
+  const { data: appointments = [] } = useQuery({
+    queryKey: ["appointments", user?.id],
     enabled: !!user,
-    queryFn: async () => {
-      const { count } = await supabase.from("children").select("*", { count: "exact", head: true });
-      return count ?? 0;
-    },
-  });
-
-  const { data: visitsCount = 0 } = useQuery({
-    queryKey: ["visits-count", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const { count } = await supabase.from("appointments").select("*", { count: "exact", head: true });
-      return count ?? 0;
-    },
+    queryFn: () => api.get<any[]>("/appointments"),
   });
 
   return (
@@ -53,25 +41,22 @@ function ProfilePage() {
                   👤
                 </div>
                 <div className="min-w-0">
-                  <p className="font-bold text-xl truncate">{profile?.full_name ?? "Parent"}</p>
+                  <p className="font-bold text-xl truncate">{user?.full_name || "Parent"}</p>
                   <p className="text-sm opacity-90 inline-flex items-center gap-1.5 mt-0.5 truncate">
                     <Mail className="h-3.5 w-3.5 shrink-0" /> {user?.email}
                   </p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Stat label="Kids" value={kidsCount} />
-                <Stat label="Visits" value={visitsCount} />
+                <Stat label="Kids" value={children.length} />
+                <Stat label="Visits" value={appointments.length} />
               </div>
             </div>
 
             <Button
               variant="outline"
               className="w-full h-12 rounded-2xl text-destructive border-destructive/30 hover:bg-destructive/10"
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/" });
-              }}
+              onClick={() => { signOut(); navigate({ to: "/" }); }}
             >
               <LogOut className="h-4 w-4 mr-2" /> Sign out
             </Button>
@@ -81,7 +66,7 @@ function ProfilePage() {
             </p>
           </div>
 
-          {/* Right: Menu items */}
+          {/* Right: Quick links */}
           <div className="space-y-3">
             <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">Quick links</p>
             <Row to="/children" icon={<Baby className="h-5 w-5" />} label="My kids" description="Manage your children's profiles" />

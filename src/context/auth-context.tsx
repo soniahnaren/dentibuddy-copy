@@ -1,43 +1,61 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Session, User } from "@supabase/supabase-js";
+import { api, getToken, removeToken, saveToken } from "@/lib/api";
 
-interface AuthCtx {
-  user: User | null;
-  session: Session | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
+export interface AuthUser {
+  id: string;
+  email: string;
+  full_name?: string;
 }
 
-const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true, signOut: async () => {} });
+interface AuthCtx {
+  user: AuthUser | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, full_name: string) => Promise<void>;
+  signOut: () => void;
+}
+
+const Ctx = createContext<AuthCtx>({
+  user: null,
+  loading: true,
+  signIn: async () => {},
+  signUp: async () => {},
+  signOut: () => {},
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-      setLoading(false);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
+    const token = getToken();
+    if (!token) { setLoading(false); return; }
+
+    api.get<AuthUser>('/auth/me')
+      .then(setUser)
+      .catch(() => removeToken())
+      .finally(() => setLoading(false));
   }, []);
 
+  async function signIn(email: string, password: string) {
+    const { token, user: u } = await api.post<{ token: string; user: AuthUser }>('/auth/login', { email, password });
+    saveToken(token);
+    setUser(u);
+  }
+
+  async function signUp(email: string, password: string, full_name: string) {
+    const { token, user: u } = await api.post<{ token: string; user: AuthUser }>('/auth/register', { email, password, full_name });
+    saveToken(token);
+    setUser(u);
+  }
+
+  function signOut() {
+    removeToken();
+    setUser(null);
+  }
+
   return (
-    <Ctx.Provider
-      value={{
-        user: session?.user ?? null,
-        session,
-        loading,
-        signOut: async () => {
-          await supabase.auth.signOut();
-        },
-      }}
-    >
+    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut }}>
       {children}
     </Ctx.Provider>
   );

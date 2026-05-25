@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
+import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Search, Star, MapPin, BadgeCheck } from "lucide-react";
 
@@ -16,10 +16,7 @@ function DentistsPage() {
 
   const { data = [] } = useQuery({
     queryKey: ["dentists"],
-    queryFn: async () => {
-      const { data } = await supabase.from("dentists").select("*").order("rating", { ascending: false });
-      return data ?? [];
-    },
+    queryFn: () => api.get<any[]>("/dentists"),
   });
 
   const filtered = data.filter((d: any) => {
@@ -29,7 +26,7 @@ function DentistsPage() {
 
   return (
     <MobileShell>
-      <div className="max-w-screen-xl mx-auto px-5 py-5 lg:px-6 lg:py-8">
+      <div className="max-w-screen-xl mx-auto px-5 pb-6 lg:px-6 lg:py-8">
         <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:mb-8">
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">Find a dentist</h1>
