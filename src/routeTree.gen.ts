@@ -12,11 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TipsRouteImport } from './routes/tips'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as HomeRouteImport } from './routes/home'
+import { Route as HistoryRouteImport } from './routes/history'
 import { Route as EmergencyRouteImport } from './routes/emergency'
+import { Route as DoctorRouteImport } from './routes/doctor'
 import { Route as ChildrenRouteImport } from './routes/children'
 import { Route as ChatbotRouteImport } from './routes/chatbot'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppointmentsRouteImport } from './routes/appointments'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DentistsIndexRouteImport } from './routes/dentists.index'
 import { Route as DentistsIdRouteImport } from './routes/dentists.$id'
@@ -37,9 +40,19 @@ const HomeRoute = HomeRouteImport.update({
   path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmergencyRoute = EmergencyRouteImport.update({
   id: '/emergency',
   path: '/emergency',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DoctorRoute = DoctorRouteImport.update({
+  id: '/doctor',
+  path: '/doctor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChildrenRoute = ChildrenRouteImport.update({
@@ -60,6 +73,11 @@ const AuthRoute = AuthRouteImport.update({
 const AppointmentsRoute = AppointmentsRouteImport.update({
   id: '/appointments',
   path: '/appointments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -85,11 +103,14 @@ const BookDentistIdRoute = BookDentistIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/appointments': typeof AppointmentsRoute
   '/auth': typeof AuthRoute
   '/chatbot': typeof ChatbotRoute
   '/children': typeof ChildrenRoute
+  '/doctor': typeof DoctorRoute
   '/emergency': typeof EmergencyRoute
+  '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
   '/profile': typeof ProfileRoute
   '/tips': typeof TipsRoute
@@ -99,11 +120,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/appointments': typeof AppointmentsRoute
   '/auth': typeof AuthRoute
   '/chatbot': typeof ChatbotRoute
   '/children': typeof ChildrenRoute
+  '/doctor': typeof DoctorRoute
   '/emergency': typeof EmergencyRoute
+  '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
   '/profile': typeof ProfileRoute
   '/tips': typeof TipsRoute
@@ -114,11 +138,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/appointments': typeof AppointmentsRoute
   '/auth': typeof AuthRoute
   '/chatbot': typeof ChatbotRoute
   '/children': typeof ChildrenRoute
+  '/doctor': typeof DoctorRoute
   '/emergency': typeof EmergencyRoute
+  '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
   '/profile': typeof ProfileRoute
   '/tips': typeof TipsRoute
@@ -130,11 +157,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/appointments'
     | '/auth'
     | '/chatbot'
     | '/children'
+    | '/doctor'
     | '/emergency'
+    | '/history'
     | '/home'
     | '/profile'
     | '/tips'
@@ -144,11 +174,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/appointments'
     | '/auth'
     | '/chatbot'
     | '/children'
+    | '/doctor'
     | '/emergency'
+    | '/history'
     | '/home'
     | '/profile'
     | '/tips'
@@ -158,11 +191,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/appointments'
     | '/auth'
     | '/chatbot'
     | '/children'
+    | '/doctor'
     | '/emergency'
+    | '/history'
     | '/home'
     | '/profile'
     | '/tips'
@@ -173,11 +209,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   AppointmentsRoute: typeof AppointmentsRoute
   AuthRoute: typeof AuthRoute
   ChatbotRoute: typeof ChatbotRoute
   ChildrenRoute: typeof ChildrenRoute
+  DoctorRoute: typeof DoctorRoute
   EmergencyRoute: typeof EmergencyRoute
+  HistoryRoute: typeof HistoryRoute
   HomeRoute: typeof HomeRoute
   ProfileRoute: typeof ProfileRoute
   TipsRoute: typeof TipsRoute
@@ -209,11 +248,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/emergency': {
       id: '/emergency'
       path: '/emergency'
       fullPath: '/emergency'
       preLoaderRoute: typeof EmergencyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/doctor': {
+      id: '/doctor'
+      path: '/doctor'
+      fullPath: '/doctor'
+      preLoaderRoute: typeof DoctorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/children': {
@@ -242,6 +295,13 @@ declare module '@tanstack/react-router' {
       path: '/appointments'
       fullPath: '/appointments'
       preLoaderRoute: typeof AppointmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -277,11 +337,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   AppointmentsRoute: AppointmentsRoute,
   AuthRoute: AuthRoute,
   ChatbotRoute: ChatbotRoute,
   ChildrenRoute: ChildrenRoute,
+  DoctorRoute: DoctorRoute,
   EmergencyRoute: EmergencyRoute,
+  HistoryRoute: HistoryRoute,
   HomeRoute: HomeRoute,
   ProfileRoute: ProfileRoute,
   TipsRoute: TipsRoute,

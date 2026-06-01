@@ -23,7 +23,10 @@ function AuthPage() {
   const [name, setName] = useState("");
 
   useEffect(() => {
-    if (user) navigate({ to: "/home" });
+    if (!user) return;
+    if (user.role === 'admin') navigate({ to: '/admin' });
+    else if (user.role === 'doctor') navigate({ to: '/doctor' });
+    else navigate({ to: '/home' });
   }, [user, navigate]);
 
   async function login(e: React.FormEvent) {

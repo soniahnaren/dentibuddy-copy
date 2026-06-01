@@ -12,6 +12,8 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     full_name: { type: String, default: '' },
+    role: { type: String, enum: ['admin', 'doctor', 'patient'], default: 'patient' },
+    city: { type: String, default: '' },
   },
   { timestamps: true }
 );
@@ -39,6 +41,7 @@ const DentistSchema = new mongoose.Schema(
     consultation_fee: { type: Number, default: 500 },
     available_today: { type: Boolean, default: false },
     phone: { type: String, default: '' },
+    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
@@ -51,7 +54,7 @@ const AppointmentSchema = new mongoose.Schema(
     appointment_date: { type: String, required: true },
     appointment_time: { type: String, required: true },
     reason: { type: String, default: '' },
-    status: { type: String, enum: ['confirmed', 'cancelled'], default: 'confirmed' },
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled', 'completed'], default: 'pending' },
   },
   { timestamps: true }
 );
@@ -89,21 +92,31 @@ async function connectDB() {
 }
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
-function signToken(userId: string, email: string) {
-  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: '30d' });
+function signToken(userId: string, email: string, role: string) {
+  return jwt.sign({ userId, email, role }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
-    const payload = jwt.verify(header.slice(7), JWT_SECRET) as { userId: string; email: string };
+    const payload = jwt.verify(header.slice(7), JWT_SECRET) as { userId: string; email: string; role: string };
     (req as any).userId = payload.userId;
     (req as any).userEmail = payload.email;
+    (req as any).userRole = payload.role ?? 'patient';
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
   }
+}
+
+function requireRole(...roles: string[]) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!roles.includes((req as any).userRole)) {
+      res.status(403).json({ error: 'Forbidden' }); return;
+    }
+    next();
+  };
 }
 
 // ── App setup ────────────────────────────────────────────────────────────────
@@ -120,9 +133,10 @@ app.post('/api/auth/register', async (req, res) => {
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) { res.status(400).json({ error: 'Email already in use' }); return; }
     const hashed = await bcrypt.hash(password, 12);
-    const user = await User.create({ email: email.toLowerCase(), password: hashed, full_name: full_name ?? '' });
-    const token = signToken(user._id.toString(), user.email);
-    res.status(201).json({ token, user: { id: user._id.toString(), email: user.email, full_name: user.full_name } });
+    // Self-registration is always patient
+    const user = await User.create({ email: email.toLowerCase(), password: hashed, full_name: full_name ?? '', role: 'patient' });
+    const token = signToken(user._id.toString(), user.email, user.role);
+    res.status(201).json({ token, user: { id: user._id.toString(), email: user.email, full_name: user.full_name, role: user.role, city: user.city ?? '' } });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -136,8 +150,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user) { res.status(401).json({ error: 'Invalid email or password' }); return; }
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) { res.status(401).json({ error: 'Invalid email or password' }); return; }
-    const token = signToken(user._id.toString(), user.email);
-    res.json({ token, user: { id: user._id.toString(), email: user.email, full_name: user.full_name } });
+    const token = signToken(user._id.toString(), user.email, user.role);
+    res.json({ token, user: { id: user._id.toString(), email: user.email, full_name: user.full_name, role: user.role, city: user.city ?? '' } });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -147,10 +161,23 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   try {
     const user = await User.findById((req as any).userId).select('-password');
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
-    res.json({ id: user._id.toString(), email: user.email, full_name: user.full_name });
+    res.json({ id: user._id.toString(), email: user.email, full_name: user.full_name, role: user.role, city: user.city ?? '' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.patch('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const { city } = req.body ?? {};
+    const user = await User.findByIdAndUpdate(
+      (req as any).userId,
+      { city: (city ?? '').trim() },
+      { new: true }
+    ).select('-password');
+    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+    res.json({ id: user._id.toString(), email: user.email, full_name: user.full_name, role: user.role, city: user.city ?? '' });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 // ── CHILDREN ──────────────────────────────────────────────────────────────────
@@ -196,14 +223,33 @@ function fmtDentist(d: any) {
     id: d._id.toString(), name: d.name, specialty: d.specialty,
     clinic_name: d.clinic_name, city: d.city, address: d.address,
     bio: d.bio, rating: d.rating, experience_years: d.experience_years,
-    consultation_fee: d.consultation_fee, available_today: d.available_today, phone: d.phone,
+    consultation_fee: d.consultation_fee, available_today: d.available_today,
+    phone: d.phone, user_id: d.user_id?.toString() ?? null,
   };
 }
 
-app.get('/api/dentists', async (_req, res) => {
+app.get('/api/dentists', async (req, res) => {
   try {
-    const dentists = await Dentist.find().sort({ rating: -1 });
+    const { city } = req.query;
+    const filter: any = {};
+    if (city && typeof city === 'string' && city.trim()) {
+      filter.city = { $regex: new RegExp(city.trim(), 'i') };
+    }
+    const dentists = await Dentist.find(filter).sort({ rating: -1 });
     res.json(dentists.map(fmtDentist));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/dentists/cities', async (_req, res) => {
+  try {
+    const raw: string[] = await Dentist.distinct('city');
+    // Normalise to title-case and deduplicate
+    const seen = new Set<string>();
+    const cities = raw
+      .map(c => c.trim().replace(/\b\w/g, l => l.toUpperCase()))
+      .filter(c => { if (seen.has(c.toLowerCase())) return false; seen.add(c.toLowerCase()); return true; })
+      .sort();
+    res.json(cities);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -252,7 +298,7 @@ app.post('/api/appointments', requireAuth, async (req, res) => {
   try {
     const appt = await (await Appointment.create({
       parent_id: (req as any).userId, child_id, dentist_id,
-      appointment_date, appointment_time, reason: reason ?? '', status: 'confirmed',
+      appointment_date, appointment_time, reason: reason ?? '', status: 'pending',
     })).populate(['child_id', 'dentist_id']);
     res.status(201).json(fmtAppt(appt));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -267,6 +313,142 @@ app.patch('/api/appointments/:id', requireAuth, async (req, res) => {
     );
     if (!appt) { res.status(404).json({ error: 'Appointment not found' }); return; }
     res.json({ id: appt._id.toString(), status: appt.status });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
+app.get('/api/admin/doctors', requireAuth, requireRole('admin'), async (_req, res) => {
+  try {
+    const dentists = await Dentist.find().sort({ createdAt: -1 });
+    res.json(dentists.map(fmtDentist));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/admin/doctors', requireAuth, requireRole('admin'), async (req, res) => {
+  const { name, specialty, clinic_name, city, address, bio, rating, experience_years, consultation_fee, available_today, phone, login_email, login_password } = req.body ?? {};
+  if (!name?.trim() || !clinic_name?.trim() || !city?.trim()) {
+    res.status(400).json({ error: 'name, clinic_name, and city are required' }); return;
+  }
+  if (!login_email?.trim() || !login_password?.trim()) {
+    res.status(400).json({ error: 'Doctor login email and password are required' }); return;
+  }
+  if (login_password.length < 6) {
+    res.status(400).json({ error: 'Password must be at least 6 characters' }); return;
+  }
+  try {
+    const existing = await User.findOne({ email: login_email.trim().toLowerCase() });
+    if (existing) { res.status(400).json({ error: 'A user with this email already exists' }); return; }
+    const hashed = await bcrypt.hash(login_password, 12);
+    const doctorUser = await User.create({ email: login_email.trim().toLowerCase(), password: hashed, full_name: name.trim(), role: 'doctor' });
+    const dentist = await Dentist.create({
+      name: name.trim(), specialty: specialty || 'Pediatric Dentist',
+      clinic_name: clinic_name.trim(), city: city.trim(),
+      address: address || '', bio: bio || '',
+      rating: rating ?? 4.5, experience_years: experience_years ?? 5,
+      consultation_fee: consultation_fee ?? 500,
+      available_today: available_today ?? false,
+      phone: phone || '', user_id: doctorUser._id,
+    });
+    res.status(201).json(fmtDentist(dentist));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/admin/doctors/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const { name, specialty, clinic_name, city, address, bio, rating, experience_years, consultation_fee, available_today, phone, login_password } = req.body ?? {};
+  try {
+    const update: any = {};
+    if (name !== undefined) update.name = name;
+    if (specialty !== undefined) update.specialty = specialty;
+    if (clinic_name !== undefined) update.clinic_name = clinic_name;
+    if (city !== undefined) update.city = city;
+    if (address !== undefined) update.address = address;
+    if (bio !== undefined) update.bio = bio;
+    if (rating !== undefined) update.rating = rating;
+    if (experience_years !== undefined) update.experience_years = experience_years;
+    if (consultation_fee !== undefined) update.consultation_fee = consultation_fee;
+    if (available_today !== undefined) update.available_today = available_today;
+    if (phone !== undefined) update.phone = phone;
+
+    const dentist = await Dentist.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!dentist) { res.status(404).json({ error: 'Doctor not found' }); return; }
+
+    // Reset password if provided
+    if (login_password?.trim()) {
+      if (login_password.length < 6) { res.status(400).json({ error: 'Password must be at least 6 characters' }); return; }
+      if (dentist.user_id) {
+        const hashed = await bcrypt.hash(login_password, 12);
+        await User.findByIdAndUpdate(dentist.user_id, { password: hashed });
+      }
+    }
+
+    res.json(fmtDentist(dentist));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/doctors/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const deleted = await Dentist.findByIdAndDelete(req.params.id);
+    if (!deleted) { res.status(404).json({ error: 'Doctor not found' }); return; }
+    res.json({ success: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ── DOCTOR ────────────────────────────────────────────────────────────────────
+app.get('/api/doctor/profile', requireAuth, requireRole('doctor'), async (req, res) => {
+  try {
+    const dentist = await Dentist.findOne({ user_id: (req as any).userId });
+    if (!dentist) { res.status(404).json({ error: 'No dentist profile linked to this account' }); return; }
+    res.json(fmtDentist(dentist));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/doctor/appointments', requireAuth, requireRole('doctor'), async (req, res) => {
+  try {
+    const dentist = await Dentist.findOne({ user_id: (req as any).userId });
+    if (!dentist) { res.status(404).json({ error: 'No dentist profile linked to this account' }); return; }
+    const appts = await Appointment.find({ dentist_id: dentist._id })
+      .populate('child_id', 'name avatar_emoji date_of_birth')
+      .populate('parent_id', 'full_name email')
+      .sort({ appointment_date: -1 });
+    res.json(appts.map((a: any) => {
+      const child = a.child_id as any;
+      const parent = a.parent_id as any;
+      return {
+        id: a._id.toString(),
+        parent: parent?._id ? { id: parent._id.toString(), full_name: parent.full_name, email: parent.email } : null,
+        child: child?._id ? { name: child.name, avatar_emoji: child.avatar_emoji, date_of_birth: child.date_of_birth } : null,
+        appointment_date: a.appointment_date,
+        appointment_time: a.appointment_time,
+        reason: a.reason,
+        status: a.status,
+        created_at: a.createdAt,
+      };
+    }));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/doctor/appointments/:id', requireAuth, requireRole('doctor'), async (req, res) => {
+  try {
+    const dentist = await Dentist.findOne({ user_id: (req as any).userId });
+    if (!dentist) { res.status(404).json({ error: 'No dentist profile linked' }); return; }
+    const appt = await Appointment.findOneAndUpdate(
+      { _id: req.params.id, dentist_id: dentist._id },
+      { status: req.body.status },
+      { new: true }
+    );
+    if (!appt) { res.status(404).json({ error: 'Appointment not found' }); return; }
+    res.json({ id: appt._id.toString(), status: appt.status });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ── PATIENT HISTORY ───────────────────────────────────────────────────────────
+app.get('/api/patient/history', requireAuth, async (req, res) => {
+  try {
+    const appts = await Appointment.find({ parent_id: (req as any).userId })
+      .populate('child_id', 'name avatar_emoji')
+      .populate('dentist_id', 'name clinic_name city specialty')
+      .sort({ appointment_date: -1 });
+    res.json(appts.map(fmtAppt));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -343,19 +525,47 @@ const TIPS = [
   { title: 'Make brushing fun', content: "Let your child pick their own toothbrush with their favourite character. Play music or brush together to make it an enjoyable routine.", emoji: '🎵', category: 'Habits' },
 ];
 
+const DEMO_USERS = [
+  { email: 'admin@dentibuddy.com',   password: 'admin123',   full_name: 'Admin User',   role: 'admin'   },
+  { email: 'doctor@dentibuddy.com',  password: 'doctor123',  full_name: 'Dr. Demo Doctor', role: 'doctor' },
+  { email: 'patient@dentibuddy.com', password: 'patient123', full_name: 'Demo Patient', role: 'patient' },
+];
+
 app.post('/api/seed', async (_req, res) => {
   try {
     const [dentistCount, tipCount] = await Promise.all([Dentist.countDocuments(), Tip.countDocuments()]);
     let dentistsAdded = 0, tipsAdded = 0;
     if (dentistCount === 0) { await Dentist.insertMany(DENTISTS); dentistsAdded = DENTISTS.length; }
     if (tipCount === 0) { await Tip.insertMany(TIPS); tipsAdded = TIPS.length; }
-    res.json({ message: 'Seed complete', dentistsAdded, tipsAdded, alreadySeeded: dentistCount > 0 && tipCount > 0 });
+
+    const usersCreated: { email: string; password: string; role: string; full_name: string }[] = [];
+    for (const demo of DEMO_USERS) {
+      const exists = await User.findOne({ email: demo.email });
+      if (!exists) {
+        const hashed = await bcrypt.hash(demo.password, 12);
+        await User.create({ email: demo.email, password: hashed, full_name: demo.full_name, role: demo.role });
+        usersCreated.push({ email: demo.email, password: demo.password, role: demo.role, full_name: demo.full_name });
+      }
+    }
+
+    // Link the demo doctor user to the first seeded dentist
+    const doctorUser = await User.findOne({ email: 'doctor@dentibuddy.com' });
+    if (doctorUser) {
+      const firstDentist = await Dentist.findOne({ user_id: null });
+      if (firstDentist) await Dentist.findByIdAndUpdate(firstDentist._id, { user_id: doctorUser._id });
+    }
+
+    res.json({
+      message: 'Seed complete',
+      dentistsAdded,
+      tipsAdded,
+      demoUsers: DEMO_USERS.map(u => ({ email: u.email, password: u.password, role: u.role, name: u.full_name })),
+      newUsersCreated: usersCreated.length,
+    });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-// Start listening immediately so Vite proxy doesn't get ECONNREFUSED.
-// MongoDB connects in the background; routes return 503 until it's ready.
 app.listen(PORT, () => {
   console.log(`\n🚀  API server → http://localhost:${PORT}`);
   console.log(`    Seed sample data: POST http://localhost:${PORT}/api/seed\n`);

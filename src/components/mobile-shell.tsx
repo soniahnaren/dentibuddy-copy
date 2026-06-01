@@ -1,10 +1,9 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Home, Calendar, MessageCircle, Siren, User, Stethoscope, Lightbulb } from "lucide-react";
+import { Home, Calendar, MessageCircle, Siren, User, Stethoscope, Lightbulb, ShieldCheck, ClipboardList, History } from "lucide-react";
 import { ReactNode, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 
-// Mobile bottom tabs (5 core sections)
-const mobileTabs = [
+const patientMobileTabs = [
   { to: "/home", label: "Home", icon: Home },
   { to: "/appointments", label: "Visits", icon: Calendar },
   { to: "/chatbot", label: "Buddy", icon: MessageCircle },
@@ -12,15 +11,41 @@ const mobileTabs = [
   { to: "/profile", label: "Me", icon: User },
 ] as const;
 
-// Desktop top nav (all sections)
-const desktopNav = [
+const patientDesktopNav = [
   { to: "/home", label: "Home", icon: Home },
   { to: "/dentists", label: "Dentists", icon: Stethoscope },
   { to: "/appointments", label: "Visits", icon: Calendar },
+  { to: "/history", label: "History", icon: History },
   { to: "/chatbot", label: "Buddy AI", icon: MessageCircle },
   { to: "/emergency", label: "Emergency", icon: Siren },
   { to: "/tips", label: "Tips", icon: Lightbulb },
 ] as const;
+
+const adminDesktopNav = [
+  { to: "/home", label: "Home", icon: Home },
+  { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
+  { to: "/profile", label: "Profile", icon: User },
+] as const;
+
+const adminMobileTabs = [
+  { to: "/home", label: "Home", icon: Home },
+  { to: "/admin", label: "Admin", icon: ShieldCheck },
+  { to: "/profile", label: "Me", icon: User },
+] as const;
+
+const doctorDesktopNav = [
+  { to: "/home", label: "Home", icon: Home },
+  { to: "/doctor", label: "My Appointments", icon: ClipboardList },
+  { to: "/profile", label: "Profile", icon: User },
+] as const;
+
+const doctorMobileTabs = [
+  { to: "/home", label: "Home", icon: Home },
+  { to: "/doctor", label: "Appointments", icon: ClipboardList },
+  { to: "/profile", label: "Me", icon: User },
+] as const;
+
+type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
 export function MobileShell({ children, hideTabs = false }: { children: ReactNode; hideTabs?: boolean }) {
   const loc = useLocation();
@@ -39,10 +64,20 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
     );
   }
 
+  const role = user.role;
+  const desktopNav: readonly NavItem[] =
+    role === 'admin' ? adminDesktopNav :
+    role === 'doctor' ? doctorDesktopNav :
+    patientDesktopNav;
+  const mobileTabs: readonly NavItem[] =
+    role === 'admin' ? adminMobileTabs :
+    role === 'doctor' ? doctorMobileTabs :
+    patientMobileTabs;
+
   return (
     <div className="min-h-dvh lg:min-h-screen flex flex-col bg-background">
 
-      {/* ── DESKTOP: sticky top nav (hidden on mobile) ── */}
+      {/* ── DESKTOP: sticky top nav ── */}
       <header className="hidden lg:block sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-screen-xl mx-auto px-6 h-16 flex items-center gap-2">
           <Link to="/home" className="flex items-center gap-2.5 shrink-0 mr-6">
@@ -51,6 +86,17 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
             </div>
             <span className="text-lg font-bold tracking-tight">DentiBuddy</span>
           </Link>
+
+          {role === 'admin' && (
+            <span className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary px-2.5 py-1 rounded-full mr-2">
+              Admin
+            </span>
+          )}
+          {role === 'doctor' && (
+            <span className="text-xs font-semibold uppercase tracking-wider bg-mint text-mint-foreground px-2.5 py-1 rounded-full mr-2">
+              Doctor
+            </span>
+          )}
 
           <nav className="flex items-center gap-0.5 flex-1">
             {desktopNav.map((item) => {
@@ -97,15 +143,21 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
         </div>
       </header>
 
-      {/* ── MOBILE: compact top bar with logo (hidden on desktop) ── */}
+      {/* ── MOBILE: compact top bar ── */}
       <div className="lg:hidden sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-md">
-        <div className="px-5 h-14 flex items-center">
+        <div className="px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-white text-base shadow-[var(--shadow-soft)]">
               🦷
             </div>
             <span className="font-bold text-base">DentiBuddy</span>
           </div>
+          {role === 'admin' && (
+            <span className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary px-2.5 py-1 rounded-full">Admin</span>
+          )}
+          {role === 'doctor' && (
+            <span className="text-xs font-semibold uppercase tracking-wider bg-mint text-mint-foreground px-2.5 py-1 rounded-full">Doctor</span>
+          )}
         </div>
       </div>
 
@@ -114,12 +166,12 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
         {children}
       </main>
 
-      {/* ── MOBILE: bottom tab bar (hidden on desktop) ── */}
+      {/* ── MOBILE: bottom tab bar ── */}
       {!hideTabs && (
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md">
-          <ul className="grid grid-cols-5">
+          <ul className={`grid grid-cols-${mobileTabs.length}`}>
             {mobileTabs.map((t) => {
-              const active = loc.pathname.startsWith(t.to);
+              const active = t.to === "/home" ? loc.pathname === "/home" : loc.pathname.startsWith(t.to);
               const Icon = t.icon;
               return (
                 <li key={t.to}>

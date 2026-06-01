@@ -32,8 +32,8 @@ function AppointmentsPage() {
   });
 
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = data.filter((a: any) => a.appointment_date >= today && a.status !== "cancelled");
-  const past = data.filter((a: any) => a.appointment_date < today || a.status === "cancelled");
+  const upcoming = data.filter((a: any) => a.appointment_date >= today && a.status !== "cancelled" && a.status !== "completed");
+  const past = data.filter((a: any) => a.appointment_date < today || a.status === "cancelled" || a.status === "completed");
 
   return (
     <MobileShell>
@@ -122,11 +122,14 @@ function ApptCard({ appt, onCancel, cancellable }: { appt: any; onCancel?: () =>
           </button>
         )}
       </div>
-      <div className="mt-4">
+      <div className="mt-4 flex items-center gap-2">
         <span className={`text-xs uppercase font-bold rounded-full px-3 py-1 ${
-          cancelled ? "bg-destructive/10 text-destructive" : "bg-mint text-mint-foreground"
+          appt.status === "cancelled"  ? "bg-destructive/10 text-destructive" :
+          appt.status === "pending"    ? "bg-sunshine/20 text-yellow-700" :
+          appt.status === "completed"  ? "bg-primary/10 text-primary" :
+                                         "bg-mint text-mint-foreground"
         }`}>
-          {appt.status}
+          {appt.status === "pending" ? "Awaiting doctor acceptance" : appt.status}
         </span>
       </div>
     </div>

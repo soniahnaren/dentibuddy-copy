@@ -1,19 +1,30 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Baby, Lightbulb, LogOut, Mail, ChevronRight, Calendar } from "lucide-react";
+import { Baby, Lightbulb, LogOut, Mail, ChevronRight, Calendar, MapPin, Check } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
   ssr: false,
 });
 
+const CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Pune', 'Hyderabad'];
+
 function ProfilePage() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshUser } = useAuth();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [selectedCity, setSelectedCity] = useState(user?.city ?? '');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSelectedCity(user?.city ?? '');
+  }, [user?.city]);
 
   const { data: children = [] } = useQuery({
     queryKey: ["children", user?.id],
@@ -25,6 +36,18 @@ function ProfilePage() {
     queryKey: ["appointments", user?.id],
     enabled: !!user,
     queryFn: () => api.get<any[]>("/appointments"),
+  });
+
+  const cityMutation = useMutation({
+    mutationFn: (city: string) => api.patch('/auth/me', { city }),
+    onSuccess: async () => {
+      await refreshUser();
+      qc.invalidateQueries({ queryKey: ['dentists'] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      toast.success(selectedCity ? `Location set to ${selectedCity}` : 'Location cleared');
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed to save location'),
   });
 
   return (
@@ -45,6 +68,11 @@ function ProfilePage() {
                   <p className="text-sm opacity-90 inline-flex items-center gap-1.5 mt-0.5 truncate">
                     <Mail className="h-3.5 w-3.5 shrink-0" /> {user?.email}
                   </p>
+                  {user?.city && (
+                    <p className="text-sm opacity-90 inline-flex items-center gap-1.5 mt-0.5">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" /> {user.city}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -52,6 +80,54 @@ function ProfilePage() {
                 <Stat label="Visits" value={appointments.length} />
               </div>
             </div>
+
+            {/* Location picker — patients only */}
+            {user?.role === 'patient' && (
+              <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  <p className="font-semibold text-sm">My Location</p>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Set your city so only doctors near you show up when you search.
+                </p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button
+                    onClick={() => setSelectedCity('')}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors border ${
+                      selectedCity === ''
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground bg-card'
+                    }`}
+                  >
+                    Any city
+                  </button>
+                  {CITIES.map(city => (
+                    <button
+                      key={city}
+                      onClick={() => setSelectedCity(city)}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors border ${
+                        selectedCity === city
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border text-muted-foreground hover:text-foreground bg-card'
+                      }`}
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  className={`w-full rounded-xl gap-1.5 ${saved ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                  onClick={() => cityMutation.mutate(selectedCity)}
+                  disabled={cityMutation.isPending}
+                >
+                  {saved ? <><Check className="h-3.5 w-3.5" /> Saved!</> :
+                   cityMutation.isPending ? 'Saving…' :
+                   'Save location'}
+                </Button>
+              </div>
+            )}
 
             <Button
               variant="outline"

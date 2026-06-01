@@ -2,9 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
+import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
-import { Search, Star, MapPin, BadgeCheck } from "lucide-react";
+import { Search, Star, MapPin, BadgeCheck, X } from "lucide-react";
 
 export const Route = createFileRoute("/dentists/")({
   component: DentistsPage,
@@ -12,22 +13,30 @@ export const Route = createFileRoute("/dentists/")({
 });
 
 function DentistsPage() {
+  const { user } = useAuth();
   const [q, setQ] = useState("");
+  // Pre-select the patient's saved city; normalise to title-case for matching
+  const [selectedCity, setSelectedCity] = useState<string>(user?.city?.trim() ?? "");
 
-  const { data = [] } = useQuery({
-    queryKey: ["dentists"],
-    queryFn: () => api.get<any[]>("/dentists"),
+  const { data: cities = [] } = useQuery<string[]>({
+    queryKey: ["dentist-cities"],
+    queryFn: () => api.get("/dentists/cities"),
   });
 
-  const filtered = data.filter((d: any) => {
+  const { data = [], isLoading } = useQuery({
+    queryKey: ["dentists", selectedCity],
+    queryFn: () => api.get<any[]>(`/dentists${selectedCity ? `?city=${encodeURIComponent(selectedCity)}` : ""}`),
+  });
+
+  const filtered = (data as any[]).filter((d: any) => {
     const s = q.toLowerCase();
-    return !s || d.name.toLowerCase().includes(s) || d.city?.toLowerCase().includes(s) || d.clinic_name.toLowerCase().includes(s);
+    return !s || d.name.toLowerCase().includes(s) || d.clinic_name.toLowerCase().includes(s);
   });
 
   return (
     <MobileShell>
       <div className="max-w-screen-xl mx-auto px-5 pb-6 lg:px-6 lg:py-8">
-        <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:mb-8">
+        <div className="flex flex-col gap-4 mb-5 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:mb-6">
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">Find a dentist</h1>
             <p className="text-muted-foreground mt-1">Trusted pediatric dentists near you</p>
@@ -37,13 +46,57 @@ function DentistsPage() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name, clinic, or city"
+              placeholder="Search by name or clinic"
               className="h-12 pl-11 rounded-2xl bg-card"
             />
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {/* Location filter */}
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">Filter by city</p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setSelectedCity("")}
+              className={`text-sm font-medium px-4 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${
+                !selectedCity
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card border border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <MapPin className="h-3.5 w-3.5" /> All cities
+            </button>
+            {cities.map((city) => (
+              <button
+                key={city}
+                onClick={() => setSelectedCity(selectedCity === city ? "" : city)}
+                className={`text-sm font-medium px-4 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${
+                  selectedCity === city
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {city}
+                {selectedCity === city && <X className="h-3 w-3" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {selectedCity && (
+          <p className="text-sm text-muted-foreground mb-4 flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            Showing <strong>{filtered.length}</strong> doctor{filtered.length !== 1 ? 's' : ''} in <strong>{selectedCity}</strong>
+            {q && ` matching "${q}"`}
+            {user?.city && selectedCity.toLowerCase() === user.city.toLowerCase() && (
+              <span className="ml-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">based on your location</span>
+            )}
+          </p>
+        )}
+
+        {isLoading ? (
+          <p className="text-center text-muted-foreground py-16">Loading…</p>
+        ) : filtered.length === 0 ? (
           <p className="text-center text-muted-foreground py-16">No dentists found.</p>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">

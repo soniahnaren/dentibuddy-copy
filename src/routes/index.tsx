@@ -1,21 +1,55 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Stethoscope, MessageCircle, Siren, Calendar, Star, Shield } from "lucide-react";
+import { Sparkles, Stethoscope, MessageCircle, Siren, Calendar, Star, Shield, Database, CheckCircle, Loader2, Copy, Check } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   component: Landing,
   ssr: false,
 });
 
+const DEMO_ACCOUNTS = [
+  { role: "Admin",   email: "admin@dentibuddy.com",   password: "admin123",   emoji: "🛡️", color: "from-primary/20 to-primary/10",   badge: "bg-primary/10 text-primary" },
+  { role: "Doctor",  email: "doctor@dentibuddy.com",  password: "doctor123",  emoji: "👨‍⚕️", color: "from-mint/30 to-mint/10",         badge: "bg-mint text-mint-foreground" },
+  { role: "Patient", email: "patient@dentibuddy.com", password: "patient123", emoji: "👨‍👧", color: "from-sunshine/20 to-sunshine/10", badge: "bg-sunshine text-sunshine-foreground" },
+];
+
 function Landing() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [seeding, setSeeding] = useState(false);
+  const [seeded, setSeeded] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && user) navigate({ to: "/home" });
+    if (!loading && user) {
+      if (user.role === "admin") navigate({ to: "/admin" });
+      else if (user.role === "doctor") navigate({ to: "/doctor" });
+      else navigate({ to: "/home" });
+    }
   }, [user, loading, navigate]);
+
+  async function handleSeed() {
+    setSeeding(true);
+    try {
+      await api.post("/seed", {});
+      setSeeded(true);
+      toast.success("Demo data seeded! Use any account below to log in.");
+    } catch (err: any) {
+      toast.error(err.message ?? "Seed failed");
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  function copyToClipboard(text: string, key: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -98,8 +132,85 @@ function Landing() {
         </div>
       </section>
 
-      {/* Social proof strip */}
+      {/* ── DEMO SEED PANEL ── */}
       <section className="border-t border-border bg-card">
+        <div className="max-w-screen-xl mx-auto px-5 py-8 lg:px-6 lg:py-10">
+          <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+
+            {/* Left: description + button */}
+            <div className="lg:w-72 shrink-0">
+              <div className="flex items-center gap-2 mb-2">
+                <Database className="h-5 w-5 text-primary" />
+                <h2 className="font-bold text-lg">Demo Setup</h2>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                Click to seed 3 demo accounts (admin, doctor, patient) plus 6 dentists and tips. Use any account below to log in instantly.
+              </p>
+              <Button
+                onClick={handleSeed}
+                disabled={seeding}
+                className={`rounded-2xl gap-2 w-full lg:w-auto ${seeded ? "bg-green-600 hover:bg-green-700" : ""}`}
+                size="lg"
+              >
+                {seeding ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Seeding…</>
+                ) : seeded ? (
+                  <><CheckCircle className="h-4 w-4" /> Seeded!</>
+                ) : (
+                  <><Database className="h-4 w-4" /> Load Demo Data</>
+                )}
+              </Button>
+            </div>
+
+            {/* Right: account cards */}
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {DEMO_ACCOUNTS.map((acc) => (
+                <div
+                  key={acc.role}
+                  className={`rounded-2xl bg-gradient-to-br ${acc.color} border border-border p-4`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-2xl">{acc.emoji}</span>
+                    <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${acc.badge}`}>
+                      {acc.role}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <CredRow
+                      label="Email"
+                      value={acc.email}
+                      copyKey={`${acc.role}-email`}
+                      copied={copied}
+                      onCopy={() => copyToClipboard(acc.email, `${acc.role}-email`)}
+                    />
+                    <CredRow
+                      label="Password"
+                      value={acc.password}
+                      copyKey={`${acc.role}-pw`}
+                      copied={copied}
+                      onCopy={() => copyToClipboard(acc.password, `${acc.role}-pw`)}
+                    />
+                  </div>
+
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-3 rounded-xl bg-background/60"
+                  >
+                    <Link to="/auth">Log in as {acc.role}</Link>
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* Social proof strip */}
+      <section className="border-t border-border bg-background">
         <div className="max-w-screen-xl mx-auto px-5 py-8 lg:px-6 lg:py-10 grid grid-cols-1 sm:grid-cols-3 gap-6 lg:gap-8 text-center">
           <Proof icon={<Star className="h-5 w-5 fill-sunshine text-sunshine" />} stat="4.9 / 5" label="Average rating from parents" />
           <Proof icon={<Shield className="h-5 w-5 text-primary" />} stat="100% secure" label="Your data is always private" />
@@ -115,16 +226,32 @@ function Landing() {
   );
 }
 
-function FeatureCard({
-  icon,
-  tone,
-  title,
-  body,
+function CredRow({
+  label, value, copyKey, copied, onCopy,
 }: {
-  icon: React.ReactNode;
-  tone: string;
-  title: string;
-  body: string;
+  label: string; value: string; copyKey: string; copied: string | null; onCopy: () => void;
+}) {
+  const isCopied = copied === copyKey;
+  return (
+    <div className="flex items-center justify-between gap-2 bg-background/50 rounded-xl px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+        <p className="text-xs font-mono font-medium truncate">{value}</p>
+      </div>
+      <button
+        onClick={onCopy}
+        className="shrink-0 p-1 rounded-lg hover:bg-background transition-colors text-muted-foreground hover:text-foreground"
+      >
+        {isCopied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
+}
+
+function FeatureCard({
+  icon, tone, title, body,
+}: {
+  icon: React.ReactNode; tone: string; title: string; body: string;
 }) {
   return (
     <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-soft)] transition-shadow">

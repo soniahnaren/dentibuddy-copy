@@ -5,6 +5,8 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name?: string;
+  role: 'admin' | 'doctor' | 'patient';
+  city: string;
 }
 
 interface AuthCtx {
@@ -13,6 +15,7 @@ interface AuthCtx {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, full_name: string) => Promise<void>;
   signOut: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx>({
@@ -21,6 +24,7 @@ const Ctx = createContext<AuthCtx>({
   signIn: async () => {},
   signUp: async () => {},
   signOut: () => {},
+  refreshUser: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -54,8 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  async function refreshUser() {
+    const u = await api.get<AuthUser>('/auth/me');
+    setUser(u);
+  }
+
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut, refreshUser }}>
       {children}
     </Ctx.Provider>
   );
