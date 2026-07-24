@@ -37,6 +37,10 @@ jobs:
       - name: Run 300 Selenium E2E & 300 API Test Cases + Load Benchmark
         run: node tests/run_all_tests.js
 
+      - name: Publish Test Execution Dashboard to GitHub Actions Summary Page
+        if: always()
+        run: cat tests/test_dashboard_results.md >> $GITHUB_STEP_SUMMARY
+
       - name: Upload Test Execution Dashboard Artifact
         uses: actions/upload-artifact@v4
         with:

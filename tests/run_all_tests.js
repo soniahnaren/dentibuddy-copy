@@ -66,6 +66,16 @@ async function main() {
   const dashboardPath = path.join(__dirname, 'test_dashboard_results.md');
   fs.writeFileSync(dashboardPath, markdown, 'utf8');
 
+  // Publish directly to GitHub Actions Summary page if running inside GitHub Actions CI environment
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    try {
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown, 'utf8');
+      console.log('📌 Published test dashboard to GitHub Actions Step Summary!');
+    } catch (err) {
+      console.error('Failed to append to GITHUB_STEP_SUMMARY:', err);
+    }
+  }
+
   console.log('===========================================================');
   console.log(markdown);
   console.log('===========================================================');
