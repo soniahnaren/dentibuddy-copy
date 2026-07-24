@@ -55,6 +55,7 @@ const AppointmentSchema = new mongoose.Schema(
     appointment_time: { type: String, required: true },
     reason: { type: String, default: '' },
     status: { type: String, enum: ['pending', 'confirmed', 'cancelled', 'completed'], default: 'pending' },
+    is_emergency: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -274,11 +275,27 @@ function fmtAppt(a: any) {
     appointment_time: a.appointment_time,
     reason: a.reason,
     status: a.status,
+    is_emergency: a.is_emergency ?? false,
     created_at: a.createdAt,
     children: child?._id ? { name: child.name, avatar_emoji: child.avatar_emoji } : null,
     dentists: dentist?._id ? { name: dentist.name, clinic_name: dentist.clinic_name, city: dentist.city } : null,
   };
 }
+
+app.get('/api/dentists/:id/booked-slots', async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date || typeof date !== 'string') {
+      res.status(400).json({ error: 'date query parameter is required' }); return;
+    }
+    const appts = await Appointment.find({
+      dentist_id: req.params.id,
+      appointment_date: date,
+      status: { $ne: 'cancelled' },
+    });
+    res.json(appts.map((a: any) => a.appointment_time));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
 app.get('/api/appointments', requireAuth, async (req, res) => {
   try {
@@ -291,14 +308,25 @@ app.get('/api/appointments', requireAuth, async (req, res) => {
 });
 
 app.post('/api/appointments', requireAuth, async (req, res) => {
-  const { child_id, dentist_id, appointment_date, appointment_time, reason } = req.body ?? {};
+  const { child_id, dentist_id, appointment_date, appointment_time, reason, is_emergency } = req.body ?? {};
   if (!child_id || !dentist_id || !appointment_date || !appointment_time) {
     res.status(400).json({ error: 'child_id, dentist_id, appointment_date and appointment_time are required' }); return;
   }
   try {
+    const existing = await Appointment.findOne({
+      dentist_id,
+      appointment_date,
+      appointment_time,
+      status: { $ne: 'cancelled' },
+    });
+    if (existing) {
+      res.status(400).json({ error: 'This time slot is already booked for this dentist. Please choose a different slot.' });
+      return;
+    }
     const appt = await (await Appointment.create({
       parent_id: (req as any).userId, child_id, dentist_id,
-      appointment_date, appointment_time, reason: reason ?? '', status: 'pending',
+      appointment_date, appointment_time, reason: reason ?? '',
+      status: 'pending', is_emergency: !!is_emergency,
     })).populate(['child_id', 'dentist_id']);
     res.status(201).json(fmtAppt(appt));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -476,27 +504,39 @@ app.post('/api/chat', async (req, res) => {
     res.status(400).json({ error: 'messages array is required' }); return;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey.startsWith('sk-ant-...')) {
-    res.json({ reply: 'Buddy AI is not configured yet. Please set ANTHROPIC_API_KEY in your .env file.' });
-    return;
-  }
+  const ollamaHost = process.env.OLLAMA_HOST ?? 'http://127.0.0.1:11434';
+  const model = process.env.OLLAMA_MODEL ?? 'qwen2.5:0.5b';
 
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system: SYSTEM_PROMPT,
-      messages: messages.map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      })),
+    const response = await fetch(`${ollamaHost}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...messages.map((m: { role: string; content: string }) => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            content: m.content,
+          })),
+        ],
+        stream: false,
+      }),
     });
-    const reply = response.content[0].type === 'text' ? response.content[0].text : '';
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Ollama service error (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    const reply = data.message?.content ?? 'I am having trouble formulating a response.';
     res.json({ reply });
   } catch (err: any) {
-    res.status(500).json({ error: err.message ?? 'AI service unavailable' });
+    console.error('Ollama chat error:', err.message);
+    res.status(500).json({
+      error: `Could not reach Ollama model (${model}). Ensure Ollama is running on ${ollamaHost}. Error: ${err.message}`,
+    });
   }
 });
 

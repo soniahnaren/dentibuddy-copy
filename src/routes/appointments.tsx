@@ -122,7 +122,7 @@ function ApptCard({ appt, onCancel, cancellable }: { appt: any; onCancel?: () =>
           </button>
         )}
       </div>
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className={`text-xs uppercase font-bold rounded-full px-3 py-1 ${
           appt.status === "cancelled"  ? "bg-destructive/10 text-destructive" :
           appt.status === "pending"    ? "bg-sunshine/20 text-yellow-700" :
@@ -131,6 +131,11 @@ function ApptCard({ appt, onCancel, cancellable }: { appt: any; onCancel?: () =>
         }`}>
           {appt.status === "pending" ? "Awaiting doctor acceptance" : appt.status}
         </span>
+        {appt.is_emergency && (
+          <span className="text-xs uppercase font-bold rounded-full px-3 py-1 bg-coral/20 text-coral flex items-center gap-1">
+            🚨 Emergency Priority
+          </span>
+        )}
       </div>
     </div>
   );

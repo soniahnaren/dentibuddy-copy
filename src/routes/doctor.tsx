@@ -21,6 +21,7 @@ interface DoctorAppt {
   appointment_time: string;
   reason: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  is_emergency?: boolean;
   created_at: string;
 }
 
@@ -149,9 +150,16 @@ function DoctorPage() {
                         </p>
                       </div>
                     </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${style.bg} ${style.text}`}>
-                      {style.label}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {a.is_emergency && (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-coral/20 text-coral">
+                          🚨 Emergency
+                        </span>
+                      )}
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${style.bg} ${style.text}`}>
+                        {style.label}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell } from "@/components/mobile-shell";
 import { api } from "@/lib/api";
@@ -8,10 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Star, MapPin, BadgeCheck } from "lucide-react";
+import { ArrowLeft, Star, MapPin, BadgeCheck, Siren, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/book/$dentistId")({
+  validateSearch: (search: Record<string, unknown>): { emergency?: boolean } => ({
+    emergency: search.emergency === "true" || search.emergency === true ? true : undefined,
+  }),
   component: BookPage,
   ssr: false,
 });
@@ -20,6 +23,7 @@ const TIMES = ["09:00", "10:00", "11:00", "12:00", "15:00", "16:00", "17:00", "1
 
 function BookPage() {
   const { dentistId } = Route.useParams();
+  const search = Route.useSearch();
   const navigate = useNavigate();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -36,9 +40,30 @@ function BookPage() {
   });
 
   const [childId, setChildId] = useState("");
-  const [date, setDate] = useState(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState("");
   const [reason, setReason] = useState("");
+  const [isEmergency, setIsEmergency] = useState(!!search.emergency);
+
+  useEffect(() => {
+    if (search.emergency) {
+      setIsEmergency(true);
+      if (!reason) setReason("🚨 Urgent Emergency Dental Visit");
+    }
+  }, [search.emergency]);
+
+  const { data: bookedSlots = [] } = useQuery<string[]>({
+    queryKey: ["booked-slots", dentistId, date],
+    queryFn: () => api.get<string[]>(`/dentists/${dentistId}/booked-slots?date=${date}`),
+    enabled: !!dentistId && !!date,
+  });
+
+  // Clear selected time if it gets booked
+  useEffect(() => {
+    if (time && bookedSlots.includes(time)) {
+      setTime("");
+    }
+  }, [bookedSlots, time]);
 
   const book = useMutation({
     mutationFn: () =>
@@ -48,19 +73,22 @@ function BookPage() {
         appointment_date: date,
         appointment_time: time,
         reason,
+        is_emergency: isEmergency,
       }),
     onSuccess: () => {
-      toast.success("Visit booked! 🎉");
+      toast.success(isEmergency ? "Emergency visit requested! 🚨" : "Visit booked! 🎉");
       qc.invalidateQueries({ queryKey: ["appointments"] });
+      qc.invalidateQueries({ queryKey: ["booked-slots", dentistId, date] });
       navigate({ to: "/appointments" });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message ?? "Failed to book appointment"),
   });
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!childId) return toast.error("Please choose a child");
-    if (!time) return toast.error("Please pick a time slot");
+    if (!time) return toast.error("Please pick an available time slot");
+    if (bookedSlots.includes(time)) return toast.error("This slot is already booked");
     book.mutate();
   }
 
@@ -73,6 +101,25 @@ function BookPage() {
         >
           <ArrowLeft className="h-4 w-4" /> Back to dentist
         </button>
+
+        {isEmergency && (
+          <div className="mb-6 rounded-2xl bg-coral/15 border border-coral/30 p-4 text-coral-foreground flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Siren className="h-6 w-6 text-coral shrink-0 animate-pulse" />
+              <div>
+                <p className="font-bold text-sm">Emergency Priority Booking</p>
+                <p className="text-xs text-muted-foreground">This request will be marked as high priority for the dentist.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEmergency(false)}
+              className="text-xs font-semibold underline text-muted-foreground hover:text-foreground"
+            >
+              Switch to normal
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 lg:gap-10 items-start">
           {/* Left: Booking form */}
@@ -113,9 +160,9 @@ function BookPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-5">
+              <div className="space-y-4">
                 <div>
-                  <Label className="text-sm font-medium mb-1.5 block">Date</Label>
+                  <Label className="text-sm font-medium mb-1.5 block">Select Date</Label>
                   <Input
                     type="date"
                     value={date}
@@ -124,21 +171,38 @@ function BookPage() {
                     className="h-12 rounded-xl bg-card"
                   />
                 </div>
+
                 <div>
-                  <Label className="text-sm font-medium mb-1.5 block">Time slot</Label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label className="text-sm font-medium">Time Slot</Label>
+                    {bookedSlots.length > 0 && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" /> {bookedSlots.length} slot(s) already booked
+                      </span>
+                    )}
+                  </div>
                   <div className="grid grid-cols-4 gap-2">
-                    {TIMES.map((t) => (
-                      <button
-                        type="button"
-                        key={t}
-                        onClick={() => setTime(t)}
-                        className={`rounded-xl py-2.5 text-sm font-medium border transition-colors ${
-                          time === t ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
+                    {TIMES.map((t) => {
+                      const isBooked = bookedSlots.includes(t);
+                      return (
+                        <button
+                          type="button"
+                          key={t}
+                          disabled={isBooked}
+                          onClick={() => setTime(t)}
+                          className={`rounded-xl py-2.5 text-sm font-medium border transition-colors flex flex-col items-center justify-center ${
+                            isBooked
+                              ? "bg-muted text-muted-foreground/50 border-border cursor-not-allowed line-through"
+                              : time === t
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-card border-border hover:border-primary/50"
+                          }`}
+                        >
+                          <span>{t}</span>
+                          {isBooked && <span className="text-[10px] no-underline font-normal">Booked</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -153,8 +217,21 @@ function BookPage() {
                 />
               </div>
 
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="urgent-check"
+                  checked={isEmergency}
+                  onChange={(e) => setIsEmergency(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <label htmlFor="urgent-check" className="text-sm font-medium text-muted-foreground cursor-pointer">
+                  Mark as High-Priority Emergency Booking 🚨
+                </label>
+              </div>
+
               <Button disabled={book.isPending} className="w-full h-12 rounded-2xl shadow-[var(--shadow-soft)] text-base" size="lg">
-                {book.isPending ? "Booking…" : "Confirm booking →"}
+                {book.isPending ? "Booking…" : isEmergency ? "Request Emergency Visit →" : "Confirm booking →"}
               </Button>
             </form>
           </div>
