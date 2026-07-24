@@ -10,6 +10,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "build:apk": "node scripts/build-apk.js",
+    "test": "node tests/run_all_tests.js",
+    "test:e2e": "node -e \"import('./tests/selenium_tests.js').then(m=>m.runSeleniumE2ETests()).then(console.log)\"",
+    "test:api": "node -e \"import('./tests/api_tests.js').then(m=>m.runApiIntegrationTests()).then(console.log)\"",
+    "test:load": "node -e \"import('./tests/load_test.js').then(m=>m.runLoadTest()).then(console.log)\"",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."

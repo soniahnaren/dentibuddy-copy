@@ -1,0 +1,44 @@
+name: DentiBuddy CI & Automated Test Suite
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Run DentiBuddy Test Suite & Load Tests
+    runs-on: ubuntu-latest
+
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI || 'mongodb://localhost:27017/dentibuddy' }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-test-secret-key-12345' }}
+      API_PORT: 3001
+      OLLAMA_HOST: 'http://127.0.0.1:11434'
+      OLLAMA_MODEL: 'qwen2.5:0.5b'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build web application & static assets
+        run: npm run build
+
+      - name: Run 300 Selenium E2E & 300 API Test Cases + Load Benchmark
+        run: node tests/run_all_tests.js
+
+      - name: Upload Test Execution Dashboard Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dentibuddy-test-dashboard
+          path: tests/test_dashboard_results.md
