@@ -1,13 +1,17 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "dentibuddy",
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\" --names \"api,ui\" --prefix-colors \"cyan,magenta\"",
     "dev:frontend": "vite dev",
     "dev:api": "tsx watch server/index.ts",
     "build": "vite build",
+    "postbuild": "node -e \"import fs from 'fs'; if(fs.existsSync('dist/client/_shell.html') && !fs.existsSync('dist/client/index.html')) fs.copyFileSync('dist/client/_shell.html', 'dist/client/index.html');\"",
     "build:dev": "vite build --mode development",
     "build:apk": "node scripts/build-apk.js",
     "test": "node tests/run_all_tests.js",
