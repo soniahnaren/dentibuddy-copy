@@ -38,22 +38,22 @@ function DentistDetail() {
             <ArrowLeft className="h-4 w-4" /> Back to dentists
           </button>
 
-          <div className="flex items-center gap-6">
-            <div className="h-24 w-24 rounded-3xl bg-card flex items-center justify-center text-5xl shadow-[var(--shadow-soft)] shrink-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 min-w-0">
+            <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-3xl bg-card flex items-center justify-center text-4xl sm:text-5xl shadow-[var(--shadow-soft)] shrink-0">
               👩‍⚕️
             </div>
-            <div>
-              <h1 className="text-3xl font-bold">{d.name}</h1>
-              <p className="text-muted-foreground mt-1">{d.specialty}</p>
-              <div className="flex items-center gap-5 mt-3 text-sm">
-                <span className="inline-flex items-center gap-1.5 font-semibold">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{d.name}</h1>
+              <p className="text-muted-foreground text-sm sm:text-base mt-0.5">{d.specialty}</p>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-3 text-xs sm:text-sm">
+                <span className="inline-flex items-center gap-1 font-semibold shrink-0">
                   <Star className="h-4 w-4 fill-sunshine text-sunshine" /> {d.rating}
                 </span>
-                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                  <BadgeCheck className="h-4 w-4" /> {d.experience_years}+ yrs experience
+                <span className="inline-flex items-center gap-1 text-muted-foreground shrink-0">
+                  <BadgeCheck className="h-4 w-4 shrink-0" /> {d.experience_years}+ yrs experience
                 </span>
                 {d.available_today && (
-                  <span className="rounded-full bg-mint text-mint-foreground text-xs font-bold uppercase px-3 py-1">
+                  <span className="rounded-full bg-mint text-mint-foreground text-[10px] sm:text-xs font-bold uppercase px-2.5 py-0.5 shrink-0">
                     Available today
                   </span>
                 )}

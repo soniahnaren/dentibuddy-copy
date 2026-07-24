@@ -1,0 +1,9 @@
+{
+  "appId": "com.dentibuddy.app",
+  "appName": "DentiBuddy",
+  "webDir": "dist/client",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

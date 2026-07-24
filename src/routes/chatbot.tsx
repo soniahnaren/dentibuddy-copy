@@ -59,7 +59,7 @@ function ChatbotPage() {
     }
   }
 
-  const MessageBubbles = ({ scrollRef: ref }: { scrollRef: React.RefObject<HTMLDivElement | null> }) => (
+  const renderMessages = (ref: React.RefObject<HTMLDivElement | null>) => (
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-4">
       {messages.map((m, i) => (
         <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -92,22 +92,6 @@ function ChatbotPage() {
     </div>
   );
 
-  const ChatInput = () => (
-    <div className="border-t border-border p-4 bg-card shrink-0">
-      <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-3">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask Buddy anything…"
-          className="h-11 rounded-2xl bg-background"
-        />
-        <Button type="submit" size="icon" disabled={busy || !input.trim()} className="h-11 w-11 rounded-2xl shrink-0">
-          <Send className="h-4 w-4" />
-        </Button>
-      </form>
-    </div>
-  );
-
   return (
     <MobileShell>
       {/* ── MOBILE layout (lg:hidden) ── */}
@@ -117,8 +101,20 @@ function ChatbotPage() {
           <p className="text-muted-foreground text-sm mt-0.5">Your pediatric dental assistant</p>
         </div>
         <div className="flex-1 min-h-0 mx-4 mb-2 rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden flex flex-col">
-          <MessageBubbles scrollRef={scrollRefMobile} />
-          <ChatInput />
+          {renderMessages(scrollRefMobile)}
+          <div className="border-t border-border p-4 bg-card shrink-0">
+            <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-3">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask Buddy anything…"
+                className="h-11 rounded-2xl bg-background"
+              />
+              <Button type="submit" size="icon" disabled={busy || !input.trim()} className="h-11 w-11 rounded-2xl shrink-0">
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
         </div>
       </div>
 
@@ -132,7 +128,7 @@ function ChatbotPage() {
         <div className="flex-1 min-h-0 max-w-screen-xl mx-auto w-full px-6 pb-6 grid grid-cols-[1fr_280px] gap-6">
           {/* Chat area */}
           <div className="flex flex-col min-h-0 rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden">
-            <MessageBubbles scrollRef={scrollRef} />
+            {renderMessages(scrollRef)}
             <div className="border-t border-border p-4 bg-card">
               <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-3">
                 <Input

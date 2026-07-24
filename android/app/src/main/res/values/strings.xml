@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DentiBuddy</string>
+    <string name="title_activity_main">DentiBuddy</string>
+    <string name="package_name">com.dentibuddy.app</string>
+    <string name="custom_url_scheme">com.dentibuddy.app</string>
+</resources>

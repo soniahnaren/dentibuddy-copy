@@ -1,4 +1,32 @@
-const BASE = '/api';
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('denti_api_url');
+    if (custom && custom.trim()) {
+      return custom.trim().replace(/\/+$/, '');
+    }
+  }
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  return '/api';
+}
+
+export function setApiBaseUrl(url: string) {
+  if (typeof window === 'undefined') return;
+  if (!url || !url.trim()) {
+    localStorage.removeItem('denti_api_url');
+  } else {
+    let formatted = url.trim();
+    if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+      formatted = `http://${formatted}`;
+    }
+    if (!formatted.endsWith('/api')) {
+      formatted = `${formatted.replace(/\/+$/, '')}/api`;
+    }
+    localStorage.setItem('denti_api_url', formatted);
+  }
+}
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -18,7 +46,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, {
+  const base = getApiBaseUrl();
+  const targetUrl = `${base}${path.startsWith('/') ? path : `/${path}`}`;
+
+  const res = await fetch(targetUrl, {
     ...options,
     headers: { ...headers, ...((options?.headers ?? {}) as Record<string, string>) },
   });

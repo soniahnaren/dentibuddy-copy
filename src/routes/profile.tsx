@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell, PageHeader } from "@/components/mobile-shell";
-import { api } from "@/lib/api";
+import { api, getApiBaseUrl, setApiBaseUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Baby, Lightbulb, LogOut, Mail, ChevronRight, Calendar, MapPin, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Baby, Lightbulb, LogOut, Mail, ChevronRight, Calendar, MapPin, Check, Server } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/profile")({
@@ -21,10 +22,19 @@ function ProfilePage() {
   const qc = useQueryClient();
   const [selectedCity, setSelectedCity] = useState(user?.city ?? '');
   const [saved, setSaved] = useState(false);
+  const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
+  const [serverSaved, setServerSaved] = useState(false);
 
   useEffect(() => {
     setSelectedCity(user?.city ?? '');
   }, [user?.city]);
+
+  function handleSaveServer() {
+    setApiBaseUrl(serverUrl);
+    setServerSaved(true);
+    setTimeout(() => setServerSaved(false), 2000);
+    toast.success("Backend Server URL updated!");
+  }
 
   const { data: children = [] } = useQuery({
     queryKey: ["children", user?.id],
@@ -128,6 +138,46 @@ function ProfilePage() {
                 </Button>
               </div>
             )}
+
+            {/* Server IP settings for mobile / local network */}
+            <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Server className="h-4 w-4 text-primary" />
+                <p className="font-semibold text-sm">Server / Backend IP</p>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Configure your computer's IP address (e.g. <code>http://192.168.31.129:3001/api</code>) when running on mobile.
+              </p>
+              <div className="space-y-3">
+                <Input
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  placeholder="http://192.168.31.129:3001/api"
+                  className="h-10 text-xs rounded-xl bg-background font-mono"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className={`flex-1 rounded-xl text-xs ${serverSaved ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                    onClick={handleSaveServer}
+                  >
+                    {serverSaved ? <><Check className="h-3.5 w-3.5 mr-1" /> Applied!</> : 'Apply Server URL'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs rounded-xl"
+                    onClick={() => {
+                      setServerUrl('/api');
+                      setApiBaseUrl('');
+                      toast.success('Reset to default /api');
+                    }}
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </div>
+            </div>
 
             <Button
               variant="outline"

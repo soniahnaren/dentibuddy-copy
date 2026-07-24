@@ -169,20 +169,20 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
       {/* ── MOBILE: bottom tab bar ── */}
       {!hideTabs && (
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md">
-          <ul className={`grid grid-cols-${mobileTabs.length}`}>
+          <ul className="flex items-center justify-around w-full">
             {mobileTabs.map((t) => {
               const active = t.to === "/home" ? loc.pathname === "/home" : loc.pathname.startsWith(t.to);
               const Icon = t.icon;
               return (
-                <li key={t.to}>
+                <li key={t.to} className="flex-1">
                   <Link
                     to={t.to}
-                    className={`flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors ${
-                      active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors w-full ${
+                      active ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : ""}`} />
-                    {t.label}
+                    <span>{t.label}</span>
                   </Link>
                 </li>
               );
