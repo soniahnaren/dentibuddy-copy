@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { runSeleniumE2ETests } from './selenium_tests.js';
 import { runApiIntegrationTests } from './api_tests.js';
 import { runLoadTest } from './load_test.js';
+import { generateExcelReport } from './excel_reporter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +24,10 @@ async function main() {
 
   const loadResults = await runLoadTest();
   console.log(`⚡ Load Benchmark Completed: ${loadResults.successfulRequests}/${loadResults.totalRequests} Requests OK (${loadResults.throughput})\n`);
+
+  // Generate Excel Spreadsheet (.xlsx) Report
+  const excelPath = generateExcelReport(seleniumResults, apiResults, loadResults);
+  console.log(`📊 Generated Excel Spreadsheet Report: ${excelPath}`);
 
   // Build Markdown Dashboard Report
   let markdown = `📊 DentiBuddy Test Execution Dashboard\n\n`;

@@ -41,8 +41,16 @@ jobs:
         if: always()
         run: cat tests/test_dashboard_results.md >> $GITHUB_STEP_SUMMARY
 
-      - name: Upload Test Execution Dashboard Artifact
+      - name: Upload Excel Test Execution Report (.xlsx) Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dentibuddy-test-dashboard
+          name: DentiBuddy_Test_Execution_Report_Excel
+          path: tests/DentiBuddy_Test_Execution_Report.xlsx
+
+      - name: Upload Test Execution Dashboard Markdown Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dentibuddy-test-dashboard-markdown
           path: tests/test_dashboard_results.md
