@@ -22,6 +22,7 @@ import { Route as AppointmentsRouteImport } from './routes/appointments'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DentistsIndexRouteImport } from './routes/dentists.index'
+import { Route as DoctorAppointmentsRouteImport } from './routes/doctor_.appointments'
 import { Route as DentistsIdRouteImport } from './routes/dentists.$id'
 import { Route as BookDentistIdRouteImport } from './routes/book.$dentistId'
 
@@ -90,6 +91,11 @@ const DentistsIndexRoute = DentistsIndexRouteImport.update({
   path: '/dentists/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DoctorAppointmentsRoute = DoctorAppointmentsRouteImport.update({
+  id: '/doctor_/appointments',
+  path: '/doctor/appointments',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DentistsIdRoute = DentistsIdRouteImport.update({
   id: '/dentists/$id',
   path: '/dentists/$id',
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/tips': typeof TipsRoute
   '/book/$dentistId': typeof BookDentistIdRoute
   '/dentists/$id': typeof DentistsIdRoute
+  '/doctor/appointments': typeof DoctorAppointmentsRoute
   '/dentists/': typeof DentistsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/tips': typeof TipsRoute
   '/book/$dentistId': typeof BookDentistIdRoute
   '/dentists/$id': typeof DentistsIdRoute
+  '/doctor/appointments': typeof DoctorAppointmentsRoute
   '/dentists': typeof DentistsIndexRoute
 }
 export interface FileRoutesById {
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/tips': typeof TipsRoute
   '/book/$dentistId': typeof BookDentistIdRoute
   '/dentists/$id': typeof DentistsIdRoute
+  '/doctor_/appointments': typeof DoctorAppointmentsRoute
   '/dentists/': typeof DentistsIndexRoute
 }
 export interface FileRouteTypes {
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/tips'
     | '/book/$dentistId'
     | '/dentists/$id'
+    | '/doctor/appointments'
     | '/dentists/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/tips'
     | '/book/$dentistId'
     | '/dentists/$id'
+    | '/doctor/appointments'
     | '/dentists'
   id:
     | '__root__'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/tips'
     | '/book/$dentistId'
     | '/dentists/$id'
+    | '/doctor_/appointments'
     | '/dentists/'
   fileRoutesById: FileRoutesById
 }
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   TipsRoute: typeof TipsRoute
   BookDentistIdRoute: typeof BookDentistIdRoute
   DentistsIdRoute: typeof DentistsIdRoute
+  DoctorAppointmentsRoute: typeof DoctorAppointmentsRoute
   DentistsIndexRoute: typeof DentistsIndexRoute
 }
 
@@ -318,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DentistsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/doctor_/appointments': {
+      id: '/doctor_/appointments'
+      path: '/doctor/appointments'
+      fullPath: '/doctor/appointments'
+      preLoaderRoute: typeof DoctorAppointmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dentists/$id': {
       id: '/dentists/$id'
       path: '/dentists/$id'
@@ -350,6 +370,7 @@ const rootRouteChildren: RootRouteChildren = {
   TipsRoute: TipsRoute,
   BookDentistIdRoute: BookDentistIdRoute,
   DentistsIdRoute: DentistsIdRoute,
+  DoctorAppointmentsRoute: DoctorAppointmentsRoute,
   DentistsIndexRoute: DentistsIndexRoute,
 }
 export const routeTree = rootRouteImport

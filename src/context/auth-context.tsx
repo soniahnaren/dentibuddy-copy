@@ -13,7 +13,13 @@ interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, full_name: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    full_name: string,
+    role?: 'patient' | 'doctor',
+    doctorInfo?: { clinic_name: string; city: string; specialty?: string },
+  ) => Promise<void>;
   signOut: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -47,8 +53,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }
 
-  async function signUp(email: string, password: string, full_name: string) {
-    const { token, user: u } = await api.post<{ token: string; user: AuthUser }>('/auth/register', { email, password, full_name });
+  async function signUp(
+    email: string,
+    password: string,
+    full_name: string,
+    role: 'patient' | 'doctor' = 'patient',
+    doctorInfo?: { clinic_name: string; city: string; specialty?: string },
+  ) {
+    const { token, user: u } = await api.post<{ token: string; user: AuthUser }>('/auth/register', {
+      email,
+      password,
+      full_name,
+      role,
+      ...(role === 'doctor' ? doctorInfo : {}),
+    });
     saveToken(token);
     setUser(u);
   }

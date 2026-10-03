@@ -6,7 +6,7 @@ import { MobileShell, PageHeader } from "@/components/mobile-shell";
 import { api, getApiBaseUrl, setApiBaseUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Baby, Lightbulb, LogOut, Mail, ChevronRight, Calendar, MapPin, Check, Server } from "lucide-react";
+import { Baby, Lightbulb, LogOut, Mail, ChevronRight, Calendar, MapPin, Check, Server, Stethoscope, ClipboardList, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/profile")({
@@ -85,10 +85,12 @@ function ProfilePage() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Stat label="Kids" value={children.length} />
-                <Stat label="Visits" value={appointments.length} />
-              </div>
+              {user?.role !== 'doctor' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Stat label="Kids" value={children.length} />
+                  <Stat label="Visits" value={appointments.length} />
+                </div>
+              )}
             </div>
 
             {/* Location picker — patients only */}
@@ -139,7 +141,7 @@ function ProfilePage() {
               </div>
             )}
 
-            {/* Server IP settings for mobile / local network */}
+            {/* Server IP settings for mobile / local network
             <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
               <div className="flex items-center gap-2 mb-2">
                 <Server className="h-4 w-4 text-primary" />
@@ -177,7 +179,7 @@ function ProfilePage() {
                   </Button>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             <Button
               variant="outline"
@@ -192,16 +194,158 @@ function ProfilePage() {
             </p>
           </div>
 
-          {/* Right: Quick links */}
-          <div className="space-y-3">
-            <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">Quick links</p>
-            <Row to="/children" icon={<Baby className="h-5 w-5" />} label="My kids" description="Manage your children's profiles" />
-            <Row to="/appointments" icon={<Calendar className="h-5 w-5" />} label="Visits" description="View and manage dental appointments" />
-            <Row to="/tips" icon={<Lightbulb className="h-5 w-5" />} label="Dental tips" description="Daily care advice for healthy smiles" />
-          </div>
+          {/* Right: doctor clinic editor OR patient quick links */}
+          {user?.role === 'doctor' ? (
+            <div className="space-y-4">
+              <DoctorClinicEditor />
+              <div className="space-y-3">
+                <Row to="/doctor" icon={<Stethoscope className="h-5 w-5" />} label="Dashboard" description="Your stats, schedule and patients" />
+                <Row to="/doctor/appointments" icon={<ClipboardList className="h-5 w-5" />} label="Appointments" description="Accept, complete and manage bookings" />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">Quick links</p>
+              <Row to="/children" icon={<Baby className="h-5 w-5" />} label="My kids" description="Manage your children's profiles" />
+              <Row to="/appointments" icon={<Calendar className="h-5 w-5" />} label="Visits" description="View and manage dental appointments" />
+              <Row to="/tips" icon={<Lightbulb className="h-5 w-5" />} label="Dental tips" description="Daily care advice for healthy smiles" />
+            </div>
+          )}
         </div>
       </div>
     </MobileShell>
+  );
+}
+
+interface ClinicForm {
+  name: string;
+  clinic_name: string;
+  specialty: string;
+  city: string;
+  address: string;
+  phone: string;
+  consultation_fee: number | string;
+  experience_years: number | string;
+  bio: string;
+  available_today: boolean;
+}
+
+function DoctorClinicEditor() {
+  const qc = useQueryClient();
+  const { data: profile, isLoading } = useQuery<any>({
+    queryKey: ["doctor-profile"],
+    queryFn: () => api.get("/doctor/profile"),
+  });
+  const [form, setForm] = useState<ClinicForm | null>(null);
+
+  useEffect(() => {
+    if (!profile) return;
+    setForm({
+      name: profile.name ?? "",
+      clinic_name: profile.clinic_name ?? "",
+      specialty: profile.specialty ?? "",
+      city: profile.city ?? "",
+      address: profile.address ?? "",
+      phone: profile.phone ?? "",
+      consultation_fee: profile.consultation_fee ?? 0,
+      experience_years: profile.experience_years ?? 0,
+      bio: profile.bio ?? "",
+      available_today: !!profile.available_today,
+    });
+  }, [profile]);
+
+  const mutation = useMutation({
+    mutationFn: (body: ClinicForm) => api.patch("/doctor/profile", body),
+    onSuccess: (updated: any) => {
+      qc.setQueryData(["doctor-profile"], updated);
+      qc.invalidateQueries({ queryKey: ["dentists"] });
+      toast.success("Clinic profile updated");
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to save"),
+  });
+
+  if (isLoading || !form) {
+    return (
+      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+        <p className="text-sm text-muted-foreground">Loading clinic profile…</p>
+      </div>
+    );
+  }
+
+  const set = <K extends keyof ClinicForm>(k: K, v: ClinicForm[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); mutation.mutate(form); }}
+      className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)] space-y-4"
+    >
+      <div className="flex items-center gap-2">
+        <Stethoscope className="h-4 w-4 text-primary" />
+        <h3 className="font-semibold">Clinic profile</h3>
+        <span className="text-xs text-muted-foreground ml-auto">Shown to patients in the directory</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormField label="Display name">
+          <Input value={form.name} onChange={(e) => set("name", e.target.value)} required className="h-11 rounded-xl bg-background" placeholder="Dr. Riya Sharma" />
+        </FormField>
+        <FormField label="Specialty">
+          <Input value={form.specialty} onChange={(e) => set("specialty", e.target.value)} className="h-11 rounded-xl bg-background" placeholder="Pediatric Dentist" />
+        </FormField>
+        <FormField label="Clinic name">
+          <Input value={form.clinic_name} onChange={(e) => set("clinic_name", e.target.value)} required className="h-11 rounded-xl bg-background" placeholder="Bright Smiles Dental" />
+        </FormField>
+        <FormField label="City">
+          <Input value={form.city} onChange={(e) => set("city", e.target.value)} required className="h-11 rounded-xl bg-background" placeholder="Chennai" />
+        </FormField>
+        <FormField label="Phone">
+          <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} className="h-11 rounded-xl bg-background" placeholder="+91 98765 43210" />
+        </FormField>
+        <FormField label="Consultation fee (₹)">
+          <Input type="number" min={0} value={form.consultation_fee} onChange={(e) => set("consultation_fee", e.target.value)} className="h-11 rounded-xl bg-background" placeholder="500" />
+        </FormField>
+        <FormField label="Experience (years)">
+          <Input type="number" min={0} value={form.experience_years} onChange={(e) => set("experience_years", e.target.value)} className="h-11 rounded-xl bg-background" placeholder="5" />
+        </FormField>
+        <FormField label="Address">
+          <Input value={form.address} onChange={(e) => set("address", e.target.value)} className="h-11 rounded-xl bg-background" placeholder="12 MG Road" />
+        </FormField>
+      </div>
+
+      <FormField label="About / bio">
+        <textarea
+          value={form.bio}
+          onChange={(e) => set("bio", e.target.value)}
+          rows={3}
+          placeholder="Tell parents about your clinic and approach to kids' dental care…"
+          className="w-full rounded-xl bg-background border border-input px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </FormField>
+
+      <label className="flex items-center gap-3 rounded-xl bg-muted/50 px-4 py-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={form.available_today}
+          onChange={(e) => set("available_today", e.target.checked)}
+          className="h-4 w-4 accent-primary"
+        />
+        <span className="text-sm font-medium">Available today</span>
+        <span className="text-xs text-muted-foreground ml-auto">Highlights you as open for same-day visits</span>
+      </label>
+
+      <Button type="submit" disabled={mutation.isPending} className="w-full h-11 rounded-xl gap-1.5">
+        <Save className="h-4 w-4" /> {mutation.isPending ? "Saving…" : "Save clinic profile"}
+      </Button>
+    </form>
+  );
+}
+
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      {children}
+    </div>
   );
 }
 

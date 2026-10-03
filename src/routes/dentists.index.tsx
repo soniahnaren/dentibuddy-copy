@@ -118,7 +118,11 @@ function DentistsPage() {
                         <p className="text-sm text-muted-foreground">{d.specialty}</p>
                       </div>
                       <div className="flex items-center gap-1 text-base font-bold shrink-0">
-                        <Star className="h-4 w-4 fill-sunshine text-sunshine" /> {d.rating}
+                        {d.rating ? (
+                          <><Star className="h-4 w-4 fill-sunshine text-sunshine" /> {d.rating}</>
+                        ) : (
+                          <span className="text-xs font-medium text-muted-foreground">New</span>
+                        )}
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mb-2">

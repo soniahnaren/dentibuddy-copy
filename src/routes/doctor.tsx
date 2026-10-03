@@ -5,8 +5,13 @@ import { MobileShell, PageHeader } from "@/components/mobile-shell";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Calendar, Clock, User, CheckCircle, XCircle, ClipboardList, ThumbsUp } from "lucide-react";
+import { Calendar, User, XCircle, ThumbsUp, Users, Stethoscope, RefreshCw, Siren, TrendingUp, TrendingDown, Minus, AlertCircle, CalendarClock, Search } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid,
+  PieChart, Pie, Cell,
+} from "recharts";
 
 export const Route = createFileRoute("/doctor")({
   component: DoctorPage,
@@ -16,7 +21,7 @@ export const Route = createFileRoute("/doctor")({
 interface DoctorAppt {
   id: string;
   parent: { id: string; full_name: string; email: string } | null;
-  child: { name: string; avatar_emoji: string; date_of_birth: string | null } | null;
+  child: { id: string; name: string; avatar_emoji: string; date_of_birth: string | null } | null;
   appointment_date: string;
   appointment_time: string;
   reason: string;
@@ -36,7 +41,7 @@ function DoctorPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('pending');
+  const [patientSearch, setPatientSearch] = useState('');
 
   useEffect(() => {
     if (user && user.role !== 'doctor') navigate({ to: '/home' });
@@ -48,7 +53,7 @@ function DoctorPage() {
     enabled: user?.role === 'doctor',
   });
 
-  const { data: appointments = [], isLoading } = useQuery<DoctorAppt[]>({
+  const { data: appointments = [] } = useQuery<DoctorAppt[]>({
     queryKey: ['doctor-appointments'],
     queryFn: () => api.get('/doctor/appointments'),
     enabled: user?.role === 'doctor',
@@ -72,160 +77,335 @@ function DoctorPage() {
     cancelled: appointments.filter(a => a.status === 'cancelled').length,
   };
 
-  const filtered = filter === 'all' ? appointments : appointments.filter(a => a.status === filter);
+  // ── Dashboard metrics derived from this doctor's appointments ──
+  const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+  const today = isoDay(new Date());
+  const yesterday = isoDay(new Date(Date.now() - 864e5));
 
-  const tabs = [
-    { key: 'pending' as const,   label: 'Pending',   count: counts.pending,   dot: true },
-    { key: 'confirmed' as const, label: 'Confirmed', count: counts.confirmed, dot: false },
-    { key: 'completed' as const, label: 'Completed', count: counts.completed, dot: false },
-    { key: 'cancelled' as const, label: 'Cancelled', count: counts.cancelled, dot: false },
-    { key: 'all' as const,       label: 'All',       count: appointments.length, dot: false },
-  ];
+  const activeOn = (iso: string) => appointments.filter(a => a.appointment_date === iso && a.status !== 'cancelled').length;
+  const todaysCount = activeOn(today);
+  const todayDelta = todaysCount - activeOn(yesterday);
+
+  const stats = {
+    totalPatients: new Set(
+      appointments.map(a => a.child?.id ?? a.child?.name).filter(Boolean)
+    ).size,
+    todaysAppointments: todaysCount,
+    treatmentsScheduled: appointments.filter(a => a.status === 'confirmed' && a.appointment_date >= today).length,
+    followUpsDue: appointments.filter(a => a.status === 'completed').length,
+    urgentCases: appointments.filter(a => a.is_emergency && (a.status === 'pending' || a.status === 'confirmed')).length,
+  };
+
+  const trendLabel =
+    todayDelta === 0 ? 'same as yesterday'
+    : todayDelta > 0 ? `+${todayDelta} vs yesterday`
+    : `${todayDelta} vs yesterday`;
+
+  const statCards = [
+    { label: 'Total patients',       value: stats.totalPatients,       icon: Users,       bg: 'bg-primary/10',  color: 'text-primary',         sub: 'unique seen',       trend: 0 },
+    { label: "Today's appointments", value: stats.todaysAppointments,  icon: Calendar,    bg: 'bg-mint/20',     color: 'text-mint-foreground', sub: trendLabel,          trend: todayDelta },
+    { label: 'Treatments scheduled', value: stats.treatmentsScheduled, icon: Stethoscope, bg: 'bg-secondary',   color: 'text-primary',         sub: 'confirmed upcoming', trend: 0 },
+    { label: 'Follow-ups due',       value: stats.followUpsDue,        icon: RefreshCw,   bg: 'bg-sunshine/20', color: 'text-yellow-700',      sub: 'completed visits',  trend: 0 },
+    { label: 'Urgent cases',         value: stats.urgentCases,         icon: Siren,       bg: 'bg-coral/20',    color: 'text-coral',           sub: 'need triage',       trend: 0 },
+  ] as const;
+
+  // Appointments per day for the last 7 days (excludes cancelled).
+  const weekSeries = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.now() - (6 - i) * 864e5);
+    const iso = isoDay(d);
+    return {
+      day: d.toLocaleDateString(undefined, { weekday: 'short' }),
+      count: activeOn(iso),
+      isToday: iso === today,
+    };
+  });
+
+  // Status breakdown for the donut (only non-zero slices).
+  const statusData = [
+    { name: 'Pending',   value: counts.pending,   color: 'var(--sunshine)' },
+    { name: 'Confirmed', value: counts.confirmed, color: 'var(--primary)' },
+    { name: 'Completed', value: counts.completed, color: 'var(--mint)' },
+    { name: 'Cancelled', value: counts.cancelled, color: 'var(--coral)' },
+  ].filter(d => d.value > 0);
+
+  // Things that need the doctor to act: all pending, plus confirmed emergencies. Emergencies first.
+  const needsAttention = appointments
+    .filter(a => a.status === 'pending' || (a.is_emergency && a.status === 'confirmed'))
+    .sort((a, b) => Number(!!b.is_emergency) - Number(!!a.is_emergency))
+    .slice(0, 5);
+
+  // Today's confirmed/pending visits, earliest first.
+  const todaySchedule = appointments
+    .filter(a => a.appointment_date === today && a.status !== 'cancelled')
+    .sort((a, b) => (a.appointment_time || '').localeCompare(b.appointment_time || ''));
+
+  // ── Patient roster — every child ever seen (any status), newest visit first ──
+  const ageFromDob = (dob: string | null) =>
+    dob ? Math.max(0, new Date().getFullYear() - new Date(dob).getFullYear()) : null;
+
+  const patientMap = new Map<string, {
+    id: string; name: string; avatar: string; dob: string | null;
+    parentName: string; visits: number; lastVisit: string; lastStatus: DoctorAppt['status'];
+  }>();
+  for (const a of appointments) {
+    const key = a.child?.id ?? a.child?.name;
+    if (!key) continue;
+    const existing = patientMap.get(key);
+    if (!existing) {
+      patientMap.set(key, {
+        id: key,
+        name: a.child?.name ?? 'Patient',
+        avatar: a.child?.avatar_emoji ?? '🧒',
+        dob: a.child?.date_of_birth ?? null,
+        parentName: a.parent?.full_name || a.parent?.email || '—',
+        visits: 1,
+        lastVisit: a.appointment_date,
+        lastStatus: a.status,
+      });
+    } else {
+      existing.visits += 1;
+      if (a.appointment_date > existing.lastVisit) {
+        existing.lastVisit = a.appointment_date;
+        existing.lastStatus = a.status;
+      }
+    }
+  }
+  const q = patientSearch.trim().toLowerCase();
+  const patients = Array.from(patientMap.values())
+    .filter(p => !q || p.name.toLowerCase().includes(q) || p.parentName.toLowerCase().includes(q))
+    .sort((a, b) => b.lastVisit.localeCompare(a.lastVisit));
 
   return (
     <MobileShell>
       <div className="max-w-screen-xl mx-auto px-5 pb-6 lg:px-6 lg:py-8">
         <PageHeader
-          title="My Appointments"
+          title="Dashboard"
           subtitle={(profile as any)?.clinic_name ? `${(profile as any).name} · ${(profile as any).clinic_name}` : 'Doctor Dashboard'}
         />
 
-        {/* Stats row */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          {([
-            { label: 'Pending',   count: counts.pending,   bg: 'bg-sunshine/20',    color: 'text-yellow-700' },
-            { label: 'Confirmed', count: counts.confirmed, bg: 'bg-mint/20',         color: 'text-mint-foreground' },
-            { label: 'Completed', count: counts.completed, bg: 'bg-primary/10',      color: 'text-primary' },
-            { label: 'Cancelled', count: counts.cancelled, bg: 'bg-destructive/10',  color: 'text-destructive' },
-          ] as const).map(s => (
-            <div key={s.label} className={`rounded-2xl ${s.bg} px-3 py-3 text-center`}>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.count}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">{s.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Filter tabs */}
-        <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
-          {tabs.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setFilter(t.key)}
-              className={`shrink-0 text-sm font-medium px-4 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${
-                filter === t.key
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card border border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t.dot && t.count > 0 && (
-                <span className="h-2 w-2 rounded-full bg-yellow-500 shrink-0" />
-              )}
-              {t.label} ({t.count})
-            </button>
-          ))}
-        </div>
-
-        {isLoading ? (
-          <p className="text-center text-muted-foreground py-16">Loading appointments…</p>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16">
-            <ClipboardList className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-muted-foreground">No appointments in this category.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filtered.map((a) => {
-              const style = STATUS_STYLES[a.status];
-              return (
-                <div key={a.id} className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/20 to-mint flex items-center justify-center text-xl shrink-0">
-                        {a.child?.avatar_emoji ?? '🧒'}
-                      </div>
-                      <div>
-                        <p className="font-semibold">{a.child?.name ?? 'Unknown patient'}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <User className="h-3 w-3" /> {a.parent?.full_name ?? a.parent?.email ?? '—'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {a.is_emergency && (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-coral/20 text-coral">
-                          🚨 Emergency
-                        </span>
-                      )}
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${style.bg} ${style.text}`}>
-                        {style.label}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" /> {a.appointment_date}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5" /> {a.appointment_time}
-                    </span>
-                  </div>
-
-                  {a.reason && (
-                    <p className="text-sm text-muted-foreground bg-muted rounded-xl px-3 py-2 mb-3">
-                      {a.reason}
-                    </p>
-                  )}
-
-                  {/* Action buttons based on current status */}
-                  {a.status === 'pending' && (
-                    <div className="flex gap-2 pt-3 border-t border-border">
-                      <Button
-                        size="sm"
-                        className="flex-1 rounded-xl gap-1.5"
-                        onClick={() => statusMutation.mutate({ id: a.id, status: 'confirmed' })}
-                        disabled={statusMutation.isPending}
-                      >
-                        <ThumbsUp className="h-3.5 w-3.5" /> Accept
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 rounded-xl gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => statusMutation.mutate({ id: a.id, status: 'cancelled' })}
-                        disabled={statusMutation.isPending}
-                      >
-                        <XCircle className="h-3.5 w-3.5" /> Decline
-                      </Button>
-                    </div>
-                  )}
-
-                  {a.status === 'confirmed' && (
-                    <div className="flex gap-2 pt-3 border-t border-border">
-                      <Button
-                        size="sm"
-                        className="flex-1 rounded-xl gap-1.5"
-                        onClick={() => statusMutation.mutate({ id: a.id, status: 'completed' })}
-                        disabled={statusMutation.isPending}
-                      >
-                        <CheckCircle className="h-3.5 w-3.5" /> Mark Completed
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 rounded-xl gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => statusMutation.mutate({ id: a.id, status: 'cancelled' })}
-                        disabled={statusMutation.isPending}
-                      >
-                        <XCircle className="h-3.5 w-3.5" /> Cancel
-                      </Button>
-                    </div>
-                  )}
+        {/* Dashboard stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+          {statCards.map(s => {
+            const Icon = s.icon;
+            const TrendIcon = s.trend > 0 ? TrendingUp : s.trend < 0 ? TrendingDown : Minus;
+            const trendColor = s.trend > 0 ? 'text-mint-foreground' : s.trend < 0 ? 'text-coral' : 'text-muted-foreground';
+            return (
+              <div key={s.label} className="rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-card)]">
+                <div className={`h-9 w-9 rounded-xl ${s.bg} ${s.color} flex items-center justify-center mb-3`}>
+                  <Icon className="h-5 w-5" />
                 </div>
-              );
-            })}
+                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-xs font-medium text-foreground/80 mt-0.5 leading-tight">{s.label}</p>
+                <p className={`text-[11px] mt-1 flex items-center gap-1 ${trendColor}`}>
+                  <TrendIcon className="h-3 w-3 shrink-0" /> {s.sub}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+          {/* 7-day appointments bar chart */}
+          <div className="lg:col-span-2 rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+            <h3 className="font-semibold mb-4">Appointments · last 7 days</h3>
+            <div className="h-56 -ml-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weekSeries} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} width={32} />
+                  <RTooltip
+                    cursor={{ fill: 'var(--muted)' }}
+                    contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card)', fontSize: 13 }}
+                    labelStyle={{ fontWeight: 600, color: 'var(--foreground)' }}
+                  />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={44}>
+                    {weekSeries.map((d, i) => (
+                      <Cell key={i} fill={d.isToday ? 'var(--primary)' : 'var(--primary-glow)'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        )}
+
+          {/* Status donut */}
+          <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+            <h3 className="font-semibold mb-4">Status breakdown</h3>
+            {statusData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-16 text-center">No appointments yet.</p>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="h-40 w-40 shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={64} paddingAngle={2} stroke="none">
+                        {statusData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                      </Pie>
+                      <RTooltip
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card)', fontSize: 13 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <ul className="space-y-2 flex-1 min-w-0">
+                  {statusData.map(d => (
+                    <li key={d.name} className="flex items-center gap-2 text-sm">
+                      <span className="h-3 w-3 rounded-full shrink-0" style={{ background: d.color }} />
+                      <span className="text-muted-foreground flex-1 truncate">{d.name}</span>
+                      <span className="font-semibold">{d.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Action panels row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          {/* Needs your attention */}
+          <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertCircle className="h-4 w-4 text-coral" />
+              <h3 className="font-semibold">Needs your attention</h3>
+              {needsAttention.length > 0 && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-coral/15 text-coral ml-auto">{needsAttention.length}</span>
+              )}
+            </div>
+            {needsAttention.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">All caught up 🎉</p>
+            ) : (
+              <div className="space-y-2.5">
+                {needsAttention.map(a => (
+                  <div key={a.id} className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
+                    <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-mint flex items-center justify-center text-lg shrink-0">
+                      {a.child?.avatar_emoji ?? '🧒'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                        {a.child?.name ?? 'Patient'}
+                        {a.is_emergency && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-coral/20 text-coral">🚨</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{a.appointment_date} · {a.appointment_time}</p>
+                    </div>
+                    {a.status === 'pending' ? (
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button size="sm" className="h-8 rounded-lg px-2.5" onClick={() => statusMutation.mutate({ id: a.id, status: 'confirmed' })} disabled={statusMutation.isPending}>
+                          <ThumbsUp className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 rounded-lg px-2.5 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => statusMutation.mutate({ id: a.id, status: 'cancelled' })} disabled={statusMutation.isPending}>
+                          <XCircle className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold text-mint-foreground shrink-0">Confirmed</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Today's schedule */}
+          <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)]">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarClock className="h-4 w-4 text-primary" />
+              <h3 className="font-semibold">Today's schedule</h3>
+              {todaySchedule.length > 0 && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary ml-auto">{todaySchedule.length}</span>
+              )}
+            </div>
+            {todaySchedule.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No visits scheduled today.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {todaySchedule.map(a => (
+                  <div key={a.id} className="flex items-center gap-3">
+                    <div className="text-sm font-semibold tabular-nums w-14 shrink-0 text-primary">{(a.appointment_time || '').slice(0, 5)}</div>
+                    <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-base shrink-0">
+                      {a.child?.avatar_emoji ?? '🧒'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{a.child?.name ?? 'Patient'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.reason || 'Check-up'}</p>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[a.status].bg} ${STATUS_STYLES[a.status].text}`}>
+                      {a.status === 'pending' ? 'Pending' : 'Confirmed'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Patients roster ── */}
+        <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)] mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <h3 className="font-semibold">Patients</h3>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">{patientMap.size}</span>
+            </div>
+            <div className="relative sm:ml-auto sm:w-64">
+              <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+              <Input
+                value={patientSearch}
+                onChange={(e) => setPatientSearch(e.target.value)}
+                placeholder="Search patient or parent…"
+                className="h-10 rounded-xl pl-9 bg-background"
+              />
+            </div>
+          </div>
+
+          {patientMap.size === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">No patients yet.</p>
+          ) : patients.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">No patients match "{patientSearch}".</p>
+          ) : (
+            <>
+              {/* Column headers (desktop) */}
+              <div className="hidden sm:grid grid-cols-[1fr_1fr_auto_auto] gap-4 px-3 pb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <span>Patient</span>
+                <span>Parent</span>
+                <span className="text-center">Visits</span>
+                <span className="text-right">Last visit</span>
+              </div>
+              <div className="divide-y divide-border">
+                {patients.map(p => {
+                  const age = ageFromDob(p.dob);
+                  const st = STATUS_STYLES[p.lastStatus];
+                  return (
+                    <div key={p.id} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_1fr_auto_auto] gap-x-4 gap-y-1 items-center px-3 py-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-mint flex items-center justify-center text-lg shrink-0">
+                          {p.avatar}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{p.name}</p>
+                          {age !== null && <p className="text-xs text-muted-foreground">{age} yrs old</p>}
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate order-last sm:order-none col-span-2 sm:col-span-1 flex items-center gap-1">
+                        <User className="h-3 w-3 shrink-0 sm:hidden" /> {p.parentName}
+                      </p>
+                      <div className="text-sm font-semibold text-center tabular-nums sm:w-16">
+                        {p.visits}
+                        <span className="text-xs font-normal text-muted-foreground sm:hidden"> visits</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${st.bg} ${st.text}`}>{p.lastVisit}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
       </div>
     </MobileShell>
   );

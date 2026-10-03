@@ -248,7 +248,11 @@ function BookPage() {
                   <p className="text-sm text-muted-foreground">{dentist.specialty}</p>
                   <div className="flex items-center gap-3 mt-1 text-sm">
                     <span className="inline-flex items-center gap-1">
-                      <Star className="h-3.5 w-3.5 fill-sunshine text-sunshine" /> {dentist.rating}
+                      {dentist.rating ? (
+                        <><Star className="h-3.5 w-3.5 fill-sunshine text-sunshine" /> {dentist.rating}</>
+                      ) : (
+                        <span className="text-muted-foreground text-xs font-medium">New</span>
+                      )}
                     </span>
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <BadgeCheck className="h-3.5 w-3.5" /> {dentist.experience_years}+ yrs

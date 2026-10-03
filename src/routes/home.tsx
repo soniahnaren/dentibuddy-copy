@@ -1,7 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
 import { MobileShell } from "@/components/mobile-shell";
+import { useTheme } from "@/components/theme-toggle";
 import { api } from "@/lib/api";
 import { Calendar, MessageCircle, Siren, Stethoscope, Lightbulb, Plus, ChevronRight, Star } from "lucide-react";
 
@@ -12,6 +14,13 @@ export const Route = createFileRoute("/home")({
 
 function HomePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // The patient home (dentists, "my kids", booking) is not for doctors/admins.
+  useEffect(() => {
+    if (user?.role === "doctor") navigate({ to: "/doctor" });
+    else if (user?.role === "admin") navigate({ to: "/admin" });
+  }, [user, navigate]);
 
   const { data: children = [] } = useQuery({
     queryKey: ["children", user?.id],
@@ -50,7 +59,7 @@ function HomePage() {
       {/* Hero section */}
       <div className="bg-gradient-to-b from-primary/15 via-primary/5 to-transparent">
         <div className="max-w-screen-xl mx-auto px-5 py-6 lg:px-6 lg:py-10">
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_auto] lg:gap-8 lg:items-start">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[auto_1fr_auto] lg:gap-8 lg:items-center">
             <div>
               <p className="text-sm uppercase tracking-wide text-muted-foreground font-medium">Hi parent 👋</p>
               <h1 className="text-4xl font-bold mt-1">Hello, {firstName}</h1>
@@ -83,6 +92,9 @@ function HomePage() {
                 </Link>
               )}
             </div>
+
+            {/* Preventive-care feature card fills the hero on desktop */}
+            <PreventiveCareCard className="hidden lg:flex justify-self-center" />
 
             {/* Quick actions */}
             <div className="grid grid-cols-4 gap-3 lg:grid-cols-2 lg:shrink-0">
@@ -118,7 +130,11 @@ function HomePage() {
                     <p className="text-xs font-medium text-primary mt-1">₹{d.consultation_fee} · {d.experience_years}+ yrs</p>
                   </div>
                   <div className="flex items-center gap-1 text-sm font-semibold shrink-0">
-                    <Star className="h-3.5 w-3.5 fill-sunshine text-sunshine" /> {d.rating}
+                    {d.rating ? (
+                      <><Star className="h-3.5 w-3.5 fill-sunshine text-sunshine" /> {d.rating}</>
+                    ) : (
+                      <span className="text-xs font-medium text-muted-foreground">New</span>
+                    )}
                   </div>
                 </Link>
               ))}
@@ -170,6 +186,97 @@ function HomePage() {
         </div>
       </div>
     </MobileShell>
+  );
+}
+
+function PreventiveCareCard({ className = "" }: { className?: string }) {
+  // "Preventive care" feature card: glowing gradient-outlined tooth on faint orbit
+  // rings. Dark & dramatic in dark mode; a soft frosted panel that camouflages into
+  // the hero in light mode.
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  const cardStyle: React.CSSProperties = isDark
+    ? {
+        background: "radial-gradient(130% 120% at 50% -10%, #17263f 0%, #0d1728 55%, #0a1220 100%)",
+        border: "1px solid rgba(255,255,255,0.07)",
+        boxShadow: "0 24px 60px -24px rgba(2,8,20,0.7)",
+      }
+    : {
+        background: "radial-gradient(130% 120% at 50% -10%, rgba(255,255,255,0.55) 0%, rgba(233,244,255,0.45) 55%, rgba(219,234,254,0.32) 100%)",
+        border: "1px solid rgba(56,132,199,0.14)",
+        boxShadow: "0 20px 50px -30px rgba(30,64,110,0.35)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+      };
+
+  const ringStroke = isDark ? "rgba(150,175,205,0.13)" : "rgba(30,80,130,0.13)";
+  const ringStrokeFaint = isDark ? "rgba(150,175,205,0.08)" : "rgba(30,80,130,0.07)";
+  const labelColor = isDark ? "text-slate-400" : "text-slate-500";
+
+  return (
+    <div
+      className={`relative flex-col justify-between w-[380px] xl:w-[430px] h-[340px] xl:h-[370px] rounded-[28px] p-7 overflow-hidden ${className}`}
+      style={cardStyle}
+    >
+      <span className={`relative z-10 text-[11px] font-semibold tracking-[0.28em] ${labelColor}`}>
+        PREVENTIVE CARE
+      </span>
+
+      <svg
+        className="absolute inset-0 m-auto pointer-events-none"
+        width="300"
+        height="280"
+        viewBox="0 0 300 280"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="pcTooth" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4fe0cf" />
+            <stop offset="55%" stopColor="#5bd6b8" />
+            <stop offset="100%" stopColor="#f2c94c" />
+          </linearGradient>
+          <radialGradient id="pcGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(79,224,207,0.28)" />
+            <stop offset="100%" stopColor="rgba(79,224,207,0)" />
+          </radialGradient>
+        </defs>
+
+        {/* faint orbit rings */}
+        <g stroke={ringStroke} strokeWidth="1" fill="none">
+          <circle cx="150" cy="130" r="50" />
+          <circle cx="150" cy="130" r="76" />
+          <circle cx="150" cy="130" r="102" />
+          <circle cx="150" cy="130" r="128" stroke={ringStrokeFaint} />
+        </g>
+
+        {/* glow behind the tooth */}
+        <circle cx="150" cy="126" r="78" fill="url(#pcGlow)" />
+
+        {/* orbit dots */}
+        <circle cx="150" cy="54" r="3.5" fill="#4fe0cf" style={{ filter: "drop-shadow(0 0 5px rgba(79,224,207,0.9))" }} />
+        <circle cx="248" cy="156" r="4.5" fill="#f2c94c" style={{ filter: "drop-shadow(0 0 5px rgba(242,201,76,0.9))" }} />
+
+        {/* tooth — centered at ~ (150,126) */}
+        <g transform="translate(89 55)" style={{ filter: "drop-shadow(0 0 7px rgba(79,224,207,0.5)) drop-shadow(0 0 4px rgba(242,201,76,0.25))" }}>
+          <path
+            d="M60 8C36 8 20 26 20 54c0 20 3 40 10 62 3.6 11 10 19 17 19 7 0 10-8 12-19 1-5 3-5 4 0 2 11 5 19 12 19 7 0 13.4-8 17-19 7-22 10-42 10-62C122 26 106 8 82 8 74 8 68 8 60 8Z"
+            fill="rgba(79,224,207,0.05)"
+            stroke="url(#pcTooth)"
+            strokeWidth="4"
+            strokeLinejoin="round"
+          />
+          {/* inner highlight arc */}
+          <path d="M45 40c-6 8-9 18-8 30" stroke="#7fe9dc" strokeOpacity="0.85" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+        </g>
+      </svg>
+
+      <span className={`relative z-10 text-center text-[11px] tracking-[0.24em] ${labelColor}`}>
+        CARED FOR, EVERY DAY
+      </span>
+    </div>
   );
 }
 

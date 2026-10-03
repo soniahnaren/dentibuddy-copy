@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Home, Calendar, MessageCircle, Siren, User, Stethoscope, Lightbulb, ShieldCheck, ClipboardList, History } from "lucide-react";
 import { ReactNode, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const patientMobileTabs = [
   { to: "/home", label: "Home", icon: Home },
@@ -34,14 +35,14 @@ const adminMobileTabs = [
 ] as const;
 
 const doctorDesktopNav = [
-  { to: "/home", label: "Home", icon: Home },
-  { to: "/doctor", label: "My Appointments", icon: ClipboardList },
+  { to: "/doctor", label: "Home", icon: Home },
+  { to: "/doctor/appointments", label: "Appointments", icon: ClipboardList },
   { to: "/profile", label: "Profile", icon: User },
 ] as const;
 
 const doctorMobileTabs = [
-  { to: "/home", label: "Home", icon: Home },
-  { to: "/doctor", label: "Appointments", icon: ClipboardList },
+  { to: "/doctor", label: "Home", icon: Home },
+  { to: "/doctor/appointments", label: "Appointments", icon: ClipboardList },
   { to: "/profile", label: "Me", icon: User },
 ] as const;
 
@@ -101,8 +102,8 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
           <nav className="flex items-center gap-0.5 flex-1">
             {desktopNav.map((item) => {
               const active =
-                item.to === "/home"
-                  ? loc.pathname === "/home"
+                item.to === "/home" || item.to === "/doctor"
+                  ? loc.pathname === item.to
                   : loc.pathname.startsWith(item.to);
               const Icon = item.icon;
               const isEmergency = item.to === "/emergency";
@@ -127,9 +128,11 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
             })}
           </nav>
 
+          <ThemeToggle className="ml-auto mr-1" />
+
           <Link
             to="/profile"
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors ml-auto ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors ${
               loc.pathname.startsWith("/profile")
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -152,12 +155,15 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
             </div>
             <span className="font-bold text-base">DentiBuddy</span>
           </div>
-          {role === 'admin' && (
-            <span className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary px-2.5 py-1 rounded-full">Admin</span>
-          )}
-          {role === 'doctor' && (
-            <span className="text-xs font-semibold uppercase tracking-wider bg-mint text-mint-foreground px-2.5 py-1 rounded-full">Doctor</span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {role === 'admin' && (
+              <span className="text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary px-2.5 py-1 rounded-full">Admin</span>
+            )}
+            {role === 'doctor' && (
+              <span className="text-xs font-semibold uppercase tracking-wider bg-mint text-mint-foreground px-2.5 py-1 rounded-full">Doctor</span>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
       </div>
 
@@ -171,7 +177,7 @@ export function MobileShell({ children, hideTabs = false }: { children: ReactNod
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md">
           <ul className="flex items-center justify-around w-full">
             {mobileTabs.map((t) => {
-              const active = t.to === "/home" ? loc.pathname === "/home" : loc.pathname.startsWith(t.to);
+              const active = t.to === "/home" || t.to === "/doctor" ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
               const Icon = t.icon;
               return (
                 <li key={t.to} className="flex-1">

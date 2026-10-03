@@ -37,6 +37,9 @@ const DentistSchema = new mongoose.Schema(
     address: { type: String, default: '' },
     bio: { type: String, default: '' },
     rating: { type: Number, default: 4.5, min: 0, max: 5 },
+    num_reviews: { type: Number, default: 0 },
+    self_registered: { type: Boolean, default: false }, // true only for dentists created via the website doctor signup
+
     experience_years: { type: Number, default: 5 },
     consultation_fee: { type: Number, default: 500 },
     available_today: { type: Boolean, default: false },
@@ -70,12 +73,25 @@ const TipSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const ReviewSchema = new mongoose.Schema(
+  {
+    dentist_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Dentist', required: true },
+    parent_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    rating: { type: Number, required: true, min: 1, max: 5 },
+    comment: { type: String, default: '', trim: true },
+  },
+  { timestamps: true }
+);
+// One review per patient per dentist (re-submitting updates it).
+ReviewSchema.index({ dentist_id: 1, parent_id: 1 }, { unique: true });
+
 // ── Models ───────────────────────────────────────────────────────────────────
 const User = (mongoose.models['User'] as mongoose.Model<any>) || mongoose.model('User', UserSchema);
 const Child = (mongoose.models['Child'] as mongoose.Model<any>) || mongoose.model('Child', ChildSchema);
 const Dentist = (mongoose.models['Dentist'] as mongoose.Model<any>) || mongoose.model('Dentist', DentistSchema);
 const Appointment = (mongoose.models['Appointment'] as mongoose.Model<any>) || mongoose.model('Appointment', AppointmentSchema);
 const Tip = (mongoose.models['Tip'] as mongoose.Model<any>) || mongoose.model('Tip', TipSchema);
+const Review = (mongoose.models['Review'] as mongoose.Model<any>) || mongoose.model('Review', ReviewSchema);
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-me';
 const PORT = process.env.API_PORT ?? 3001;
@@ -127,15 +143,44 @@ app.use(express.json());
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, full_name } = req.body ?? {};
+  const { email, password, full_name, role: rawRole, clinic_name, city, specialty } = req.body ?? {};
   if (!email || !password) { res.status(400).json({ error: 'Email and password are required' }); return; }
   if (password.length < 6) { res.status(400).json({ error: 'Password must be at least 6 characters' }); return; }
+
+  // Only patient or doctor may self-register; anything else (e.g. admin) falls back to patient.
+  const role = rawRole === 'doctor' ? 'doctor' : 'patient';
+
+  // Doctors need a clinic + city so a Dentist profile can be created and the dashboard works.
+  if (role === 'doctor') {
+    if (!clinic_name?.trim()) { res.status(400).json({ error: 'Clinic name is required for doctor accounts' }); return; }
+    if (!city?.trim()) { res.status(400).json({ error: 'City is required for doctor accounts' }); return; }
+  }
+
   try {
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) { res.status(400).json({ error: 'Email already in use' }); return; }
     const hashed = await bcrypt.hash(password, 12);
-    // Self-registration is always patient
-    const user = await User.create({ email: email.toLowerCase(), password: hashed, full_name: full_name ?? '', role: 'patient' });
+    const user = await User.create({
+      email: email.toLowerCase(),
+      password: hashed,
+      full_name: full_name ?? '',
+      role,
+      city: role === 'doctor' ? city.trim() : '',
+    });
+
+    // Create the linked Dentist profile so the doctor dashboard has data to load.
+    if (role === 'doctor') {
+      await Dentist.create({
+        name: (full_name ?? '').trim() || 'Doctor',
+        clinic_name: clinic_name.trim(),
+        city: city.trim(),
+        specialty: specialty?.trim() || 'Pediatric Dentist',
+        rating: null, // new dentists have no rating yet — shown as "New" rather than a fabricated score
+        self_registered: true,
+        user_id: user._id,
+      });
+    }
+
     const token = signToken(user._id.toString(), user.email, user.role);
     res.status(201).json({ token, user: { id: user._id.toString(), email: user.email, full_name: user.full_name, role: user.role, city: user.city ?? '' } });
   } catch (err: any) {
@@ -223,7 +268,7 @@ function fmtDentist(d: any) {
   return {
     id: d._id.toString(), name: d.name, specialty: d.specialty,
     clinic_name: d.clinic_name, city: d.city, address: d.address,
-    bio: d.bio, rating: d.rating, experience_years: d.experience_years,
+    bio: d.bio, rating: d.rating, num_reviews: d.num_reviews ?? 0, experience_years: d.experience_years,
     consultation_fee: d.consultation_fee, available_today: d.available_today,
     phone: d.phone, user_id: d.user_id?.toString() ?? null,
   };
@@ -232,7 +277,8 @@ function fmtDentist(d: any) {
 app.get('/api/dentists', async (req, res) => {
   try {
     const { city } = req.query;
-    const filter: any = {};
+    // Only surface dentists who signed up through the website — bookings must reach a real doctor.
+    const filter: any = { self_registered: true };
     if (city && typeof city === 'string' && city.trim()) {
       filter.city = { $regex: new RegExp(city.trim(), 'i') };
     }
@@ -243,7 +289,7 @@ app.get('/api/dentists', async (req, res) => {
 
 app.get('/api/dentists/cities', async (_req, res) => {
   try {
-    const raw: string[] = await Dentist.distinct('city');
+    const raw: string[] = await Dentist.distinct('city', { self_registered: true });
     // Normalise to title-case and deduplicate
     const seen = new Set<string>();
     const cities = raw
@@ -294,6 +340,89 @@ app.get('/api/dentists/:id/booked-slots', async (req, res) => {
       status: { $ne: 'cancelled' },
     });
     res.json(appts.map((a: any) => a.appointment_time));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ── REVIEWS / RATINGS ─────────────────────────────────────────────────────────
+// Recompute a dentist's average rating + review count from its reviews.
+async function recomputeDentistRating(dentistId: string) {
+  const agg = await Review.aggregate([
+    { $match: { dentist_id: new mongoose.Types.ObjectId(dentistId) } },
+    { $group: { _id: '$dentist_id', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+  ]);
+  const avg = agg[0]?.avg ?? null;
+  const count = agg[0]?.count ?? 0;
+  await Dentist.findByIdAndUpdate(dentistId, {
+    rating: avg != null ? Math.round(avg * 10) / 10 : null,
+    num_reviews: count,
+  });
+}
+
+// Public list of a dentist's reviews (newest first).
+app.get('/api/dentists/:id/reviews', async (req, res) => {
+  try {
+    const reviews = await Review.find({ dentist_id: req.params.id })
+      .populate('parent_id', 'full_name email')
+      .sort({ createdAt: -1 });
+    res.json(reviews.map((r: any) => ({
+      id: r._id.toString(),
+      parent_id: (r.parent_id?._id ?? r.parent_id)?.toString() ?? null,
+      reviewer_name: r.parent_id?.full_name || r.parent_id?.email || 'Parent',
+      rating: r.rating,
+      comment: r.comment,
+      created_at: r.createdAt,
+    })));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// A patient submits (or updates) their rating for a dentist they've visited.
+app.post('/api/dentists/:id/reviews', requireAuth, requireRole('patient'), async (req, res) => {
+  const dentistId = req.params.id;
+  const { rating, comment } = req.body ?? {};
+  const num = Number(rating);
+  if (!Number.isInteger(num) || num < 1 || num > 5) {
+    res.status(400).json({ error: 'Rating must be a whole number from 1 to 5' }); return;
+  }
+  try {
+    const dentist = await Dentist.findById(dentistId);
+    if (!dentist) { res.status(404).json({ error: 'Dentist not found' }); return; }
+
+    // You can only rate a dentist you've actually had a completed visit with.
+    const visited = await Appointment.findOne({
+      parent_id: (req as any).userId,
+      dentist_id: dentistId,
+      status: 'completed',
+    });
+    if (!visited) {
+      res.status(403).json({ error: 'You can review a dentist only after a completed visit.' }); return;
+    }
+
+    const review = await Review.findOneAndUpdate(
+      { dentist_id: dentistId, parent_id: (req as any).userId },
+      { rating: num, comment: (comment ?? '').toString().trim() },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    await recomputeDentistRating(dentistId);
+    const updated = await Dentist.findById(dentistId);
+
+    res.status(201).json({
+      review: { id: review._id.toString(), rating: review.rating, comment: review.comment },
+      rating: updated?.rating ?? null,
+      num_reviews: updated?.num_reviews ?? 0,
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Whether the current patient is allowed to review this dentist (has a completed visit).
+app.get('/api/dentists/:id/can-review', requireAuth, async (req, res) => {
+  try {
+    if ((req as any).userRole !== 'patient') { res.json({ can_review: false }); return; }
+    const visited = await Appointment.findOne({
+      parent_id: (req as any).userId,
+      dentist_id: req.params.id,
+      status: 'completed',
+    });
+    res.json({ can_review: !!visited });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -430,6 +559,47 @@ app.get('/api/doctor/profile', requireAuth, requireRole('doctor'), async (req, r
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Doctor edits their own public clinic listing.
+app.patch('/api/doctor/profile', requireAuth, requireRole('doctor'), async (req, res) => {
+  try {
+    const dentist = await Dentist.findOne({ user_id: (req as any).userId });
+    if (!dentist) { res.status(404).json({ error: 'No dentist profile linked to this account' }); return; }
+
+    const b = req.body ?? {};
+    const str = (v: any) => (typeof v === 'string' ? v.trim() : undefined);
+
+    // Required fields must stay non-empty if provided.
+    const name = str(b.name);
+    const clinic_name = str(b.clinic_name);
+    const city = str(b.city);
+    if (name === '') { res.status(400).json({ error: 'Name cannot be empty' }); return; }
+    if (clinic_name === '') { res.status(400).json({ error: 'Clinic name cannot be empty' }); return; }
+    if (city === '') { res.status(400).json({ error: 'City cannot be empty' }); return; }
+
+    if (name !== undefined) dentist.name = name;
+    if (clinic_name !== undefined) dentist.clinic_name = clinic_name;
+    if (city !== undefined) dentist.city = city;
+    if (str(b.specialty) !== undefined) dentist.specialty = str(b.specialty) || 'Pediatric Dentist';
+    if (b.address !== undefined) dentist.address = str(b.address) ?? '';
+    if (b.bio !== undefined) dentist.bio = str(b.bio) ?? '';
+    if (b.phone !== undefined) dentist.phone = str(b.phone) ?? '';
+    if (b.consultation_fee !== undefined) {
+      const fee = Number(b.consultation_fee);
+      if (!Number.isFinite(fee) || fee < 0) { res.status(400).json({ error: 'Consultation fee must be a positive number' }); return; }
+      dentist.consultation_fee = fee;
+    }
+    if (b.experience_years !== undefined) {
+      const yrs = Number(b.experience_years);
+      if (!Number.isFinite(yrs) || yrs < 0) { res.status(400).json({ error: 'Experience must be a positive number' }); return; }
+      dentist.experience_years = yrs;
+    }
+    if (b.available_today !== undefined) dentist.available_today = !!b.available_today;
+
+    await dentist.save();
+    res.json(fmtDentist(dentist));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/doctor/appointments', requireAuth, requireRole('doctor'), async (req, res) => {
   try {
     const dentist = await Dentist.findOne({ user_id: (req as any).userId });
@@ -444,11 +614,12 @@ app.get('/api/doctor/appointments', requireAuth, requireRole('doctor'), async (r
       return {
         id: a._id.toString(),
         parent: parent?._id ? { id: parent._id.toString(), full_name: parent.full_name, email: parent.email } : null,
-        child: child?._id ? { name: child.name, avatar_emoji: child.avatar_emoji, date_of_birth: child.date_of_birth } : null,
+        child: child?._id ? { id: child._id.toString(), name: child.name, avatar_emoji: child.avatar_emoji, date_of_birth: child.date_of_birth } : null,
         appointment_date: a.appointment_date,
         appointment_time: a.appointment_time,
         reason: a.reason,
         status: a.status,
+        is_emergency: a.is_emergency ?? false,
         created_at: a.createdAt,
       };
     }));
@@ -524,7 +695,7 @@ app.post('/api/chat', async (req, res) => {
       }),
     });
 
-    if (!response.ok) {
+    if (!response.ok) { 
       const errText = await response.text().catch(() => '');
       throw new Error(`Ollama service error (${response.status}): ${errText}`);
     }
@@ -573,9 +744,9 @@ const DEMO_USERS = [
 
 app.post('/api/seed', async (_req, res) => {
   try {
-    const [dentistCount, tipCount] = await Promise.all([Dentist.countDocuments(), Tip.countDocuments()]);
+    // Note: we no longer seed fake dentists — the directory only shows real website signups.
+    const tipCount = await Tip.countDocuments();
     let dentistsAdded = 0, tipsAdded = 0;
-    if (dentistCount === 0) { await Dentist.insertMany(DENTISTS); dentistsAdded = DENTISTS.length; }
     if (tipCount === 0) { await Tip.insertMany(TIPS); tipsAdded = TIPS.length; }
 
     const usersCreated: { email: string; password: string; role: string; full_name: string }[] = [];
@@ -588,11 +759,22 @@ app.post('/api/seed', async (_req, res) => {
       }
     }
 
-    // Link the demo doctor user to the first seeded dentist
+    // Give the demo doctor a real linked clinic profile so its dashboard (and a bookable listing) works.
     const doctorUser = await User.findOne({ email: 'doctor@dentibuddy.com' });
     if (doctorUser) {
-      const firstDentist = await Dentist.findOne({ user_id: null });
-      if (firstDentist) await Dentist.findByIdAndUpdate(firstDentist._id, { user_id: doctorUser._id });
+      const existing = await Dentist.findOne({ user_id: doctorUser._id });
+      if (!existing) {
+        await Dentist.create({
+          name: doctorUser.full_name || 'Dr. Demo Doctor',
+          clinic_name: 'DentiBuddy Demo Clinic',
+          city: 'Chennai',
+          specialty: 'Pediatric Dentist',
+          rating: null,
+          self_registered: true,
+          user_id: doctorUser._id,
+        });
+        dentistsAdded = 1;
+      }
     }
 
     res.json({

@@ -93,7 +93,7 @@ async function buildApk() {
   // 7. Build Gradle APK
   console.log('\n🔨 Step 3/4: Compiling Android APK via Gradle...');
   const isWindows = process.platform === 'win32';
-  const gradlewCmd = isWindows ? 'gradlew.bat assembleDebug' : './gradlew assembleDebug';
+  const gradlewCmd = isWindows ? '.\\gradlew.bat assembleDebug' : './gradlew assembleDebug';
   const androidDir = path.join(rootDir, 'android');
   execSync(gradlewCmd, { cwd: androidDir, stdio: 'inherit' });
 

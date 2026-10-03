@@ -52,21 +52,21 @@ function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden w-full max-w-full">
       {/* Navbar */}
       <header className="border-b border-border bg-background/95 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-screen-xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-white text-lg shadow-[var(--shadow-soft)]">
               🦷
             </div>
             <span className="text-lg font-bold tracking-tight">DentiBuddy</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" asChild className="rounded-xl">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button variant="ghost" asChild className="rounded-xl text-xs sm:text-sm px-2.5 sm:px-4">
               <Link to="/auth">Log in</Link>
             </Button>
-            <Button asChild className="rounded-xl shadow-[var(--shadow-soft)]">
+            <Button asChild className="rounded-xl shadow-[var(--shadow-soft)] text-xs sm:text-sm px-3 sm:px-4">
               <Link to="/auth">Get started free</Link>
             </Button>
           </div>
@@ -75,25 +75,25 @@ function Landing() {
 
       {/* Hero */}
       <section className="flex-1 flex items-center bg-gradient-to-br from-primary/10 via-background to-mint/20">
-        <div className="max-w-screen-xl mx-auto px-5 py-10 lg:px-6 lg:py-20 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+        <div className="max-w-screen-xl mx-auto px-4 py-8 sm:px-6 lg:py-20 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center w-full">
           <div>
             <div className="inline-flex items-center gap-1.5 rounded-full bg-mint px-4 py-1.5 text-sm font-medium text-mint-foreground mb-6">
               <Sparkles className="h-3.5 w-3.5" /> AI-powered pediatric care
             </div>
-            <h1 className="text-4xl lg:text-6xl font-bold leading-tight tracking-tight">
+            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold leading-tight tracking-tight">
               Bright smiles for{" "}
               <span className="text-primary">little</span> humans.
             </h1>
-            <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-lg">
+            <p className="mt-4 sm:mt-6 text-base sm:text-lg text-muted-foreground leading-relaxed max-w-lg">
               Book trusted pediatric dentists, get instant AI guidance, manage your
               children's dental records, and handle emergencies — all in one friendly app.
             </p>
 
-            <div className="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-3 lg:gap-4">
-              <Button asChild size="lg" className="h-13 px-8 rounded-2xl text-base shadow-[var(--shadow-soft)]">
+            <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4">
+              <Button asChild size="lg" className="h-12 sm:h-13 px-6 sm:px-8 rounded-2xl text-base shadow-[var(--shadow-soft)]">
                 <Link to="/auth">Get started free →</Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="h-13 px-8 rounded-2xl text-base">
+              <Button asChild size="lg" variant="outline" className="h-12 sm:h-13 px-6 sm:px-8 rounded-2xl text-base">
                 <Link to="/auth">Log in</Link>
               </Button>
             </div>
@@ -103,7 +103,7 @@ function Landing() {
           </div>
 
           {/* Feature cards */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <FeatureCard
               icon={<Stethoscope className="h-6 w-6" />}
               tone="bg-secondary text-primary"
